@@ -78,9 +78,9 @@ const AttendanceApp = () => {
   const [autoTimeSlot, setAutoTimeSlot] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Absence approval options
+  // Staff and approval options
   const approvalOptions = ['הרב איתמר', 'הרב אילעאי', 'בועז', 'הרב שובי', 'עמית', 'הרב יונדב', 'אסף', 'יהודה'];
-  
+
   // Auto-update time slot every minute
   useEffect(() => {
     if (autoTimeSlot) {
@@ -243,13 +243,13 @@ const AttendanceApp = () => {
 
       const success = await sendToSheet('היעדרויות', sheetData);
       if (success) {
-        alert('דיווח היעדות נרשם בהצלחה וחובר לגיליון!');
+        alert('דיווח היעדרות נרשם בהצלחה וחובר לגיליון!');
       } else {
-        alert('דיווח היעדות נרשם מקומית, אך לא הצליח לחבר לגיליון. נסה שוב.');
+        alert('דיווח היעדרות נרשם מקומית, אך לא הצליח לחבר לגיליון. נסה שוב.');
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('דיווח היעדות נרשם מקומית, אך לא הצליח לחבר לגיליון.');
+      alert('דיווח היעדרות נרשם מקומית, אך לא הצליח לחבר לגיליון.');
     } finally {
       setIsLoading(false);
     }
@@ -259,6 +259,27 @@ const AttendanceApp = () => {
   const filteredStudents = students.filter(student =>
     student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     student.group.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Logo SVG component
+  const Logo = () => (
+    <svg className="h-12 w-12" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      {/* Cypress tree */}
+      <path d="M75 15 Q85 25 85 45 Q85 65 80 75 Q75 85 70 85 Q65 85 70 75 Q75 65 75 45 Q75 25 75 15" 
+            fill="#8B9A6B" opacity="0.8"/>
+      <path d="M72 20 Q80 28 80 45 Q80 62 76 72 Q72 82 68 82 Q64 82 68 72 Q72 62 72 45 Q72 28 72 20" 
+            fill="#A4B86F"/>
+      
+      {/* Fields/waves */}
+      <path d="M10 60 Q30 55 50 60 Q70 65 90 60 L90 70 Q70 75 50 70 Q30 65 10 70 Z" 
+            fill="#A4905C" opacity="0.7"/>
+      <path d="M5 65 Q25 62 45 65 Q65 68 85 65 L85 75 Q65 78 45 75 Q25 72 5 75 Z" 
+            fill="#9B8654" opacity="0.8"/>
+      <path d="M15 70 Q35 68 55 70 Q75 72 95 70 L95 80 Q75 82 55 80 Q35 78 15 80 Z" 
+            fill="#8B7A4A"/>
+      <path d="M10 75 Q30 73 50 75 Q70 77 90 75 L90 85 Q70 87 50 85 Q30 83 10 85 Z" 
+            fill="#7A6B3F"/>
+    </svg>
   );
 
   // Dashboard Component
@@ -276,20 +297,20 @@ const AttendanceApp = () => {
     return (
       <div className="space-y-6" dir="rtl">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-600">סך חניכים</p>
-                <p className="text-2xl font-bold text-blue-900">{students.length}</p>
+                <p className="text-sm font-medium text-amber-700">סך חניכים</p>
+                <p className="text-2xl font-bold text-amber-900">{students.length}</p>
               </div>
-              <Users className="h-8 w-8 text-blue-600" />
+              <Users className="h-8 w-8 text-amber-600" />
             </div>
           </div>
           
           <div className="bg-green-50 p-4 rounded-lg border border-green-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-600">נוכחות היום</p>
+                <p className="text-sm font-medium text-green-700">נוכחות היום</p>
                 <p className="text-2xl font-bold text-green-900">{overallAttendanceRate}%</p>
               </div>
               <CheckCircle className="h-8 w-8 text-green-600" />
@@ -299,7 +320,7 @@ const AttendanceApp = () => {
           <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-yellow-600">שיעורים היום</p>
+                <p className="text-sm font-medium text-yellow-700">שיעורים היום</p>
                 <p className="text-2xl font-bold text-yellow-900">{todaySchedule.length}</p>
               </div>
               <Calendar className="h-8 w-8 text-yellow-600" />
@@ -317,20 +338,41 @@ const AttendanceApp = () => {
           </div>
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-semibold text-blue-800 mb-2">🔗 גיליון Google Sheets</h3>
-          <p className="text-blue-700 text-sm mb-2">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <h3 className="font-semibold text-amber-800 mb-2">🔗 גיליון Google Sheets</h3>
+          <p className="text-amber-700 text-sm mb-2">
             כל הנתונים נשמרים באופן אוטומטי בגיליון Google Sheets
           </p>
           <a 
             href={SHEET_URL} 
             target="_blank" 
             rel="noopener noreferrer"
-            className="inline-flex items-center px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+            className="inline-flex items-center px-3 py-1 bg-amber-600 text-white rounded text-sm hover:bg-amber-700"
           >
             פתח גיליון
           </a>
         </div>
+
+        {lowAttendanceStudents.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <h3 className="font-semibold text-red-800 mb-2">⚠️ חניכים הדורשים תשומת לב</h3>
+            <div className="space-y-2">
+              {lowAttendanceStudents.map(student => {
+                const stats = calculateAttendanceStats(student.id);
+                return (
+                  <div key={student.id} className="flex justify-between items-center bg-white p-2 rounded">
+                    <span className="font-medium">{student.name} ({student.group})</span>
+                    <span className={`px-2 py-1 rounded text-sm ${
+                      stats.status === 'critical' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {stats.percentage}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <h3 className="font-semibold text-gray-800 mb-4">מערכת שעות היום</h3>
@@ -345,9 +387,9 @@ const AttendanceApp = () => {
                   <div className="flex justify-between items-start mb-2">
                     <span className="font-medium text-sm">{lesson.timeSlot}</span>
                     <span className={`px-2 py-1 rounded text-xs ${
-                      lesson.group === 'כולם' ? 'bg-blue-100 text-blue-800' : 
+                      lesson.group === 'כולם' ? 'bg-amber-100 text-amber-800' : 
                       lesson.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 
-                      'bg-purple-100 text-purple-800'
+                      'bg-stone-100 text-stone-800'
                     }`}>
                       {lesson.group}
                     </span>
@@ -371,6 +413,13 @@ const AttendanceApp = () => {
   const TakeAttendance = () => {
     const [presentStudents, setPresentStudents] = useState([]);
 
+    // Check if attendance already exists for this slot
+    const attendanceExists = attendance.some(a => 
+      a.date === selectedDate && 
+      a.timeSlot === selectedTimeSlot && 
+      (selectedGroup === 'כולם' || a.scheduleId.includes(selectedGroup))
+    );
+
     const handleStudentToggle = (studentId) => {
       setPresentStudents(prev => 
         prev.includes(studentId) 
@@ -381,7 +430,12 @@ const AttendanceApp = () => {
 
     const handleSubmit = async () => {
       if (!recorder.trim()) {
-        alert('אנא הזן שם הרושם');
+        alert('אנא בחר רושם');
+        return;
+      }
+
+      if (attendanceExists) {
+        alert('נוכחות כבר נרשמה עבור שעה זו!');
         return;
       }
       
@@ -415,23 +469,34 @@ const AttendanceApp = () => {
     return (
       <div className="space-y-6" dir="rtl">
         <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">רישום נוכחות</h2>
+          <h2 className="text-xl font-semibold mb-4 text-amber-800">רישום נוכחות</h2>
           
-          {autoTimeSlot && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          {attendanceExists && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+                <span className="text-red-800 font-medium">
+                  נוכחות כבר נרשמה עבור שעה זו!
+                </span>
+              </div>
+            </div>
+          )}
+          
+          {autoTimeSlot && !attendanceExists && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2 space-x-reverse">
-                  <Clock className="h-5 w-5 text-blue-600" />
-                  <span className="text-blue-800 font-medium">
+                  <Clock className="h-5 w-5 text-amber-600" />
+                  <span className="text-amber-800 font-medium">
                     שעה נבחרה אוטומטית: {selectedTimeSlot}
                   </span>
-                  <span className="text-blue-600 text-sm">
+                  <span className="text-amber-600 text-sm">
                     (השעה הנוכחית: {getCurrentTimeInfo()})
                   </span>
                 </div>
                 <button
                   onClick={() => setAutoTimeSlot(false)}
-                  className="text-blue-600 hover:text-blue-800 text-sm underline"
+                  className="text-amber-600 hover:text-amber-800 text-sm underline"
                 >
                   בחירה ידנית
                 </button>
@@ -446,7 +511,7 @@ const AttendanceApp = () => {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
               />
             </div>
             
@@ -459,7 +524,7 @@ const AttendanceApp = () => {
                   setAutoTimeSlot(false);
                 }}
                 disabled={autoTimeSlot}
-                className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500 ${
                   autoTimeSlot ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
               >
@@ -474,7 +539,7 @@ const AttendanceApp = () => {
               <select
                 value={selectedGroup}
                 onChange={(e) => setSelectedGroup(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
               >
                 <option value="כולם">כל החניכים</option>
                 <option value="קבוצה א">קבוצה א</option>
@@ -487,7 +552,7 @@ const AttendanceApp = () => {
               <select
                 value={recorder}
                 onChange={(e) => setRecorder(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
               >
                 <option value="">בחר רושם</option>
                 {approvalOptions.map(person => (
@@ -518,7 +583,7 @@ const AttendanceApp = () => {
               {studentsInAcademy.length === 0 ? (
                 <div className="col-span-full text-center text-gray-500 py-4">
                   {studentsCurrentlyOut.length > 0 ? 
-                    "כל החניכים בקבוצה זו נמצאים בהיעדות" : 
+                    "כל החניכים בקבוצה זו נמצאים בהיעדרות" : 
                     "אין חניכים בקבוצה זו"}
                 </div>
               ) : (
@@ -528,11 +593,12 @@ const AttendanceApp = () => {
                       type="checkbox"
                       checked={presentStudents.includes(student.id)}
                       onChange={() => handleStudentToggle(student.id)}
-                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                      disabled={attendanceExists}
                     />
                     <span className="text-sm">{student.name}</span>
                     <span className={`px-2 py-1 rounded text-xs ${
-                      student.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 'bg-purple-100 text-purple-800'
+                      student.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 'bg-stone-100 text-stone-800'
                     }`}>
                       {student.group}
                     </span>
@@ -545,22 +611,22 @@ const AttendanceApp = () => {
           <div className="flex justify-between">
             <button
               onClick={() => setPresentStudents(studentsInAcademy.map(s => s.id))}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-              disabled={studentsInAcademy.length === 0 || isLoading}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300"
+              disabled={studentsInAcademy.length === 0 || isLoading || attendanceExists}
             >
               בחר הכל
             </button>
             <button
               onClick={() => setPresentStudents([])}
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-              disabled={isLoading}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300"
+              disabled={isLoading || attendanceExists}
             >
               נקה הכל
             </button>
             <button
               onClick={handleSubmit}
-              className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300"
-              disabled={studentsInAcademy.length === 0 || isLoading}
+              className="px-6 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:bg-amber-300"
+              disabled={studentsInAcademy.length === 0 || isLoading || attendanceExists}
             >
               {isLoading ? 'שולח...' : 'שלח נוכחות'}
             </button>
@@ -621,7 +687,7 @@ const AttendanceApp = () => {
     return (
       <div className="space-y-6" dir="rtl">
         <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">דיווח היעדות חדשה</h2>
+          <h2 className="text-xl font-semibold mb-4 text-amber-800">דיווח היעדרות חדשה</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>
@@ -629,7 +695,7 @@ const AttendanceApp = () => {
               <select
                 value={formData.studentId}
                 onChange={(e) => handleInputChange('studentId', e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
               >
                 <option value="">בחר חניך</option>
                 {students.map(student => (
@@ -645,7 +711,7 @@ const AttendanceApp = () => {
               <select
                 value={formData.approvedBy}
                 onChange={(e) => handleInputChange('approvedBy', e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
               >
                 <option value="">בחר מאשר</option>
                 {approvalOptions.map(approver => (
@@ -660,7 +726,7 @@ const AttendanceApp = () => {
                 type="date"
                 value={formData.departureDate}
                 onChange={(e) => handleInputChange('departureDate', e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
               />
             </div>
 
@@ -670,7 +736,7 @@ const AttendanceApp = () => {
                 type="time"
                 value={formData.departureTime}
                 onChange={(e) => handleInputChange('departureTime', e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
               />
             </div>
 
@@ -680,7 +746,7 @@ const AttendanceApp = () => {
                 type="date"
                 value={formData.returnDate}
                 onChange={(e) => handleInputChange('returnDate', e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
               />
             </div>
 
@@ -690,7 +756,7 @@ const AttendanceApp = () => {
                 type="time"
                 value={formData.returnTime}
                 onChange={(e) => handleInputChange('returnTime', e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
               />
             </div>
           </div>
@@ -702,24 +768,24 @@ const AttendanceApp = () => {
               value={formData.purpose}
               onChange={(e) => handleInputChange('purpose', e.target.value)}
               placeholder="למשל: ביקור רופא, אירוע משפחתי, צרכים אישיים..."
-              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
           <button
             onClick={handleSubmit}
-            className="w-full px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300"
+            className="w-full px-6 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:bg-amber-300"
             disabled={isLoading}
           >
-            {isLoading ? 'שולח...' : 'דווח היעדות'}
+            {isLoading ? 'שולח...' : 'דווח היעדרות'}
           </button>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold mb-4">היעדויות פעילות</h3>
+          <h3 className="text-lg font-semibold mb-4 text-amber-800">היעדרויות פעילות</h3>
           
           {currentAbsences.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">אין היעדויות פעילות כרגע</p>
+            <p className="text-gray-500 text-center py-4">אין היעדרויות פעילות כרגע</p>
           ) : (
             <div className="space-y-3">
               {currentAbsences.map(absence => {
@@ -741,7 +807,7 @@ const AttendanceApp = () => {
                         <span className={`px-2 py-1 rounded text-xs ${
                           isCurrentlyOut ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
                         }`}>
-                          {isCurrentlyOut ? 'יצא מהמכינה' : 'יעדות מתוכננת'}
+                          {isCurrentlyOut ? 'יצא מהמכינה' : 'היעדרות מתוכננת'}
                         </span>
                       </div>
                     </div>
@@ -759,7 +825,7 @@ const AttendanceApp = () => {
                     
                     <div className="mt-2 text-sm">
                       <span className="font-medium">מאושר על ידי: </span>
-                      <span className="text-blue-600">{absence.approvedBy}</span>
+                      <span className="text-amber-600">{absence.approvedBy}</span>
                     </div>
                   </div>
                 );
@@ -777,7 +843,7 @@ const AttendanceApp = () => {
       <div className="space-y-6" dir="rtl">
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">סקירת חניכים</h2>
+            <h2 className="text-xl font-semibold text-amber-800">סקירת חניכים</h2>
             <div className="flex space-x-2 space-x-reverse">
               <div className="relative">
                 <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -786,7 +852,7 @@ const AttendanceApp = () => {
                   placeholder="חפש חניכים..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-10 pl-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                  className="pr-10 pl-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
                 />
               </div>
             </div>
@@ -811,7 +877,7 @@ const AttendanceApp = () => {
                       <td className="py-3 px-4 font-medium">{student.name}</td>
                       <td className="py-3 px-4">
                         <span className={`px-2 py-1 rounded text-xs ${
-                          student.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 'bg-purple-100 text-purple-800'
+                          student.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 'bg-stone-100 text-stone-800'
                         }`}>
                           {student.group}
                         </span>
@@ -828,7 +894,7 @@ const AttendanceApp = () => {
                         {stats.presentCount} / {stats.expectedLessons}
                         {stats.totalLessons !== stats.expectedLessons && (
                           <div className="text-xs text-orange-600">
-                            ({stats.totalLessons - stats.expectedLessons} בהיעדות)
+                            ({stats.totalLessons - stats.expectedLessons} בהיעדרות)
                           </div>
                         )}
                       </td>
@@ -850,16 +916,22 @@ const AttendanceApp = () => {
 
   // Navigation
   const Navigation = () => (
-    <nav className="bg-white border-b border-gray-200 p-4" dir="rtl">
+    <nav className="bg-gradient-to-r from-amber-100 to-green-100 border-b border-amber-200 p-4" dir="rtl">
       <div className="flex justify-between items-center">
-        <h1 className="text-xl font-bold text-gray-800">🎖️ מערכת נוכחות מכינה קדם צבאית</h1>
+        <div className="flex items-center space-x-3 space-x-reverse">
+          <Logo />
+          <div>
+            <h1 className="text-xl font-bold text-amber-800">רוח השדה</h1>
+            <p className="text-sm text-amber-700">מכינה קדם צבאית דתית לבנים</p>
+          </div>
+        </div>
         <div className="flex space-x-4 space-x-reverse">
           <button
             onClick={() => setCurrentView('dashboard')}
             className={`px-4 py-2 rounded ${
               currentView === 'dashboard' 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-amber-600 text-white' 
+                : 'bg-white text-amber-700 hover:bg-amber-50 border border-amber-200'
             }`}
           >
             לוח בקרה
@@ -868,8 +940,8 @@ const AttendanceApp = () => {
             onClick={() => setCurrentView('attendance')}
             className={`px-4 py-2 rounded ${
               currentView === 'attendance' 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-amber-600 text-white' 
+                : 'bg-white text-amber-700 hover:bg-amber-50 border border-amber-200'
             }`}
           >
             רישום נוכחות
@@ -878,18 +950,18 @@ const AttendanceApp = () => {
             onClick={() => setCurrentView('absences')}
             className={`px-4 py-2 rounded ${
               currentView === 'absences' 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-amber-600 text-white' 
+                : 'bg-white text-amber-700 hover:bg-amber-50 border border-amber-200'
             }`}
           >
-            דיווח היעדות
+            דיווח היעדרות
           </button>
           <button
             onClick={() => setCurrentView('students')}
             className={`px-4 py-2 rounded ${
               currentView === 'students' 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-amber-600 text-white' 
+                : 'bg-white text-amber-700 hover:bg-amber-50 border border-amber-200'
             }`}
           >
             חניכים
@@ -900,7 +972,7 @@ const AttendanceApp = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-green-50">
       <Navigation />
       <div className="container mx-auto px-4 py-6">
         {currentView === 'dashboard' && <Dashboard />}
