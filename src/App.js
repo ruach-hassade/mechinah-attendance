@@ -45,16 +45,14 @@ const AttendanceApp = () => {
   // Helper function to get the most recent past time slot
   const getCurrentTimeSlot = () => {
     const now = new Date();
-    const currentTime = now.getHours() * 60 + now.getMinutes(); // Convert to minutes
+    const currentTime = now.getHours() * 60 + now.getMinutes();
     
-    // Convert time slots to minutes for comparison
     const timeSlotMinutes = timeSlots.map(slot => {
       const [hours, minutes] = slot.split(':').map(Number);
       return hours * 60 + minutes;
     });
     
-    // Find the most recent time slot that has passed
-    let selectedSlot = timeSlots[0]; // Default to first slot
+    let selectedSlot = timeSlots[0];
     
     for (let i = timeSlotMinutes.length - 1; i >= 0; i--) {
       if (currentTime >= timeSlotMinutes[i]) {
@@ -70,7 +68,7 @@ const AttendanceApp = () => {
   const [students, setStudents] = useState(initialStudents);
   const [schedule, setSchedule] = useState([]);
   const [attendance, setAttendance] = useState([]);
-  const [absences, setAbsences] = useState([]); // New absence tracking
+  const [absences, setAbsences] = useState([]);
   const [currentView, setCurrentView] = useState('dashboard');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(getCurrentTimeSlot());
@@ -88,7 +86,7 @@ const AttendanceApp = () => {
     if (autoTimeSlot) {
       const interval = setInterval(() => {
         setSelectedTimeSlot(getCurrentTimeSlot());
-      }, 60000); // Update every minute
+      }, 60000);
       
       return () => clearInterval(interval);
     }
@@ -100,14 +98,12 @@ const AttendanceApp = () => {
       const scheduleData = [];
       const today = new Date();
       
-      // Generate schedule for next 7 days
       for (let day = 0; day < 7; day++) {
         const date = new Date(today);
         date.setDate(today.getDate() + day);
         const dateStr = date.toISOString().split('T')[0];
         
         timeSlots.forEach(slot => {
-          // Mix of group-specific and all-student lessons
           const groups = day % 3 === 0 ? ['קבוצה א', 'קבוצה ב', 'כולם'] : ['כולם'];
           groups.forEach(group => {
             scheduleData.push({
@@ -141,14 +137,13 @@ const AttendanceApp = () => {
     });
   };
 
-  // Calculate attendance statistics with absence consideration
+  // Calculate attendance statistics
   const calculateAttendanceStats = (studentId) => {
     const studentAttendance = attendance.filter(a => a.studentId === studentId);
     const expectedLessons = schedule.filter(s => 
       s.group === 'כולם' || s.group === students.find(st => st.id === studentId)?.group
     );
     
-    // Filter out lessons where student was legitimately absent
     const relevantLessons = expectedLessons.filter(lesson => 
       !isStudentAbsent(studentId, lesson.date, lesson.timeSlot)
     );
@@ -165,7 +160,7 @@ const AttendanceApp = () => {
     };
   };
 
-  // Handle attendance submission with Google Sheets integration
+  // Handle attendance submission
   const handleAttendanceSubmission = async (presentStudents) => {
     const scheduleSlot = schedule.find(s => 
       s.date === selectedDate && 
@@ -179,7 +174,6 @@ const AttendanceApp = () => {
       students : 
       students.filter(s => s.group === selectedGroup);
 
-    // Filter out students who are legitimately absent
     const studentsToRecord = relevantStudents.filter(student => 
       !isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
     );
@@ -195,13 +189,11 @@ const AttendanceApp = () => {
       timeSlot: selectedTimeSlot
     }));
 
-    // Update local state
     setAttendance(prev => [
       ...prev.filter(a => !newAttendanceRecords.some(n => n.id === a.id)),
       ...newAttendanceRecords
     ]);
 
-    // Send to Google Sheets
     setIsLoading(true);
     try {
       const sheetData = newAttendanceRecords.map(record => [
@@ -227,7 +219,7 @@ const AttendanceApp = () => {
     }
   };
 
-  // Handle absence submission with Google Sheets integration
+  // Handle absence submission
   const handleAbsenceSubmission = async (formData) => {
     const newAbsence = {
       id: `absence-${Date.now()}`,
@@ -235,10 +227,8 @@ const AttendanceApp = () => {
       createdAt: new Date().toISOString()
     };
 
-    // Update local state
     setAbsences(prev => [...prev, newAbsence]);
 
-    // Send to Google Sheets
     setIsLoading(true);
     try {
       const sheetData = [[
@@ -342,29 +332,294 @@ const AttendanceApp = () => {
           </a>
         </div>
 
-        {lowAttendanceStudents.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <h3 className="font-semibold text-red-800 mb-2">⚠️ חניכים הדורשים תשומת לב</h3>
-            <div className="space-y-2">
-              {lowAttendanceStudents.map(student => {
-                const stats = calculateAttendanceStats(student.id);
-                return (
-                  <div key={student.id} className="flex justify-between items-center bg-white p-2 rounded">
-                    <span className="font-medium">{student.name} ({student.group})</span>
-                    <span className={`px-2 py-1 rounded text-sm ${
-                      stats.status === 'critical' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {stats.percentage}%
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <h3 className="font-semibold text-gray-800 mb-4">מערכת שעות היום</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {todaySchedule.map(lesson => {
+              const lessonAttendance = todayAttendance.filter(a => a.scheduleId === lesson.id);
+              const attendanceRate = lessonAttendance.length > 0 ? 
+                Math.round((lessonAttendance.filter(a => a.present).length / lessonAttendance.length) * 100) : 0;
+              
+              return (
+                <div key={lesson.id} className="border border-gray-200 rounded p-3">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-medium text-sm">{lesson.timeSlot}</span>
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      lesson.group === 'כולם' ? 'bg-blue-100 text-blue-800' : 
+                      lesson.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 
+                      'bg-purple-100 text-purple-800'
+                    }`}>
+                      {lesson.group}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 mb-2">{lesson.description}</p>
+                  {lessonAttendance.length > 0 && (
+                    <div className="text-xs text-gray-500">
+                      נוכחות: {attendanceRate}%
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Take Attendance Component
+  const TakeAttendance = () => {
+    const [presentStudents, setPresentStudents] = useState([]);
+
+    const handleStudentToggle = (studentId) => {
+      setPresentStudents(prev => 
+        prev.includes(studentId) 
+          ? prev.filter(id => id !== studentId)
+          : [...prev, studentId]
+      );
+    };
+
+    const handleSubmit = async () => {
+      if (!recorder.trim()) {
+        alert('אנא הזן שם הרושם');
+        return;
+      }
+      
+      await handleAttendanceSubmission(presentStudents);
+      setPresentStudents([]);
+      setRecorder('');
+    };
+
+    const relevantStudents = selectedGroup === 'כולם' ? 
+      students : 
+      students.filter(s => s.group === selectedGroup);
+
+    const studentsInAcademy = relevantStudents.filter(student => 
+      !isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
+    );
+
+    const studentsCurrentlyOut = relevantStudents.filter(student => 
+      isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
+    );
+
+    const getCurrentTimeInfo = () => {
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('he-IL', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      return timeString;
+    };
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4">רישום נוכחות</h2>
+          
+          {autoTimeSlot && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <Clock className="h-5 w-5 text-blue-600" />
+                  <span className="text-blue-800 font-medium">
+                    שעה נבחרה אוטומטית: {selectedTimeSlot}
+                  </span>
+                  <span className="text-blue-600 text-sm">
+                    (השעה הנוכחית: {getCurrentTimeInfo()})
+                  </span>
+                </div>
+                <button
+                  onClick={() => setAutoTimeSlot(false)}
+                  className="text-blue-600 hover:text-blue-800 text-sm underline"
+                >
+                  בחירה ידנית
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">תאריך</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">שעה</label>
+              <select
+                value={selectedTimeSlot}
+                onChange={(e) => {
+                  setSelectedTimeSlot(e.target.value);
+                  setAutoTimeSlot(false);
+                }}
+                disabled={autoTimeSlot}
+                className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 ${
+                  autoTimeSlot ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
+              >
+                {timeSlots.map(slot => (
+                  <option key={slot} value={slot}>{slot}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">קבוצה</label>
+              <select
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="כולם">כל החניכים</option>
+                <option value="קבוצה א">קבוצה א</option>
+                <option value="קבוצה ב">קבוצה ב</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">רושם</label>
+              <input
+                type="text"
+                value={recorder}
+                onChange={(e) => setRecorder(e.target.value)}
+                placeholder="שמך"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-medium">חניכים נוכחים במכינה ({studentsInAcademy.length})</h3>
+              <div className="text-sm text-gray-600">
+                נבחרו: {presentStudents.length} / {studentsInAcademy.length}
+              </div>
+            </div>
+
+            {studentsCurrentlyOut.length > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded p-3 mb-3">
+                <h4 className="font-medium text-orange-800 mb-2">חניכים שיצאו מהמכינה ({studentsCurrentlyOut.length}):</h4>
+                <div className="text-sm text-orange-700">
+                  {studentsCurrentlyOut.map(student => student.name).join(', ')}
+                </div>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-96 overflow-y-auto border border-gray-200 rounded p-4">
+              {studentsInAcademy.length === 0 ? (
+                <div className="col-span-full text-center text-gray-500 py-4">
+                  {studentsCurrentlyOut.length > 0 ? 
+                    "כל החניכים בקבוצה זו נמצאים בהיעדות" : 
+                    "אין חניכים בקבוצה זו"}
+                </div>
+              ) : (
+                studentsInAcademy.map(student => (
+                  <label key={student.id} className="flex items-center space-x-2 space-x-reverse p-2 hover:bg-gray-50 rounded cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={presentStudents.includes(student.id)}
+                      onChange={() => handleStudentToggle(student.id)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm">{student.name}</span>
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      student.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 'bg-purple-100 text-purple-800'
+                    }`}>
+                      {student.group}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-between">
+            <button
+              onClick={() => setPresentStudents(studentsInAcademy.map(s => s.id))}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              disabled={studentsInAcademy.length === 0 || isLoading}
+            >
+              בחר הכל
+            </button>
+            <button
+              onClick={() => setPresentStudents([])}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              disabled={isLoading}
+            >
+              נקה הכל
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300"
+              disabled={studentsInAcademy.length === 0 || isLoading}
+            >
+              {isLoading ? 'שולח...' : 'שלח נוכחות'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Absence Reporting Component
+  const AbsenceReporting = () => {
+    const [formData, setFormData] = useState({
+      studentId: '',
+      departureDate: new Date().toISOString().split('T')[0],
+      departureTime: '08:00',
+      returnDate: new Date().toISOString().split('T')[0],
+      returnTime: '17:00',
+      purpose: '',
+      approvedBy: ''
+    });
+
+    const handleInputChange = (field, value) => {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    };
+
+    const handleSubmit = async () => {
+      if (!formData.studentId || !formData.purpose || !formData.approvedBy) {
+        alert('אנא מלא את כל השדות הנדרשים');
+        return;
+      }
+
+      await handleAbsenceSubmission(formData);
+      
+      setFormData({
+        studentId: '',
+        departureDate: new Date().toISOString().split('T')[0],
+        departureTime: '08:00',
+        returnDate: new Date().toISOString().split('T')[0],
+        returnTime: '17:00',
+        purpose: '',
+        approvedBy: ''
+      });
+    };
+
+    const getCurrentAbsences = () => {
+      const now = new Date();
+      return absences.filter(absence => {
+        const returnDateTime = new Date(`${absence.returnDate} ${absence.returnTime}`);
+        return returnDateTime >= now;
+      });
+    };
+
+    const currentAbsences = getCurrentAbsences();
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4">דיווח היעדות חדשה</h2>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">חניך</label>
@@ -457,7 +712,6 @@ const AttendanceApp = () => {
           </button>
         </div>
 
-        {/* Current Absences List */}
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <h3 className="text-lg font-semibold mb-4">היעדויות פעילות</h3>
           
