@@ -202,7 +202,7 @@ const AttendanceApp = () => {
     }));
 
     setAttendance(prev => [
-      ...prev.filter(a => !newAttendanceRecords.some(n => n.id === a.id)),
+      ...prev.filter(a => !newAttendanceRecords.some(n => n.scheduleId === a.scheduleId)),
       ...newAttendanceRecords
     ]);
 
@@ -426,11 +426,15 @@ const AttendanceApp = () => {
     const [presentStudents, setPresentStudents] = useState([]);
 
     // Check if attendance already exists for this slot
-    const attendanceExists = attendance.some(a => 
-      a.date === selectedDate && 
-      a.timeSlot === selectedTimeSlot && 
-      (selectedGroup === 'כולם' || a.scheduleId.includes(selectedGroup))
-    );
+    const attendanceExists = attendance.some(a => {
+      const scheduleSlot = schedule.find(s => 
+        s.date === selectedDate && 
+        s.timeSlot === selectedTimeSlot && 
+        s.group === selectedGroup
+      );
+      
+      return scheduleSlot && a.scheduleId === scheduleSlot.id;
+    });
 
     const handleStudentToggle = (studentId) => {
       setPresentStudents(prev => 
