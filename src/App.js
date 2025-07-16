@@ -79,8 +79,8 @@ const AttendanceApp = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   // Absence approval options
-  const approvalOptions = ['הרב אילעאי', 'הרב שובי', 'בועז', 'עמית'];
-
+  const approvalOptions = ['הרב איתמר', 'הרב אילעאי', 'בועז', 'הרב שובי', 'עמית', 'הרב יונדב', 'אסף', 'יהודה'];
+  
   // Auto-update time slot every minute
   useEffect(() => {
     if (autoTimeSlot) {
@@ -484,13 +484,16 @@ const AttendanceApp = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">רושם</label>
-              <input
-                type="text"
+              <select
                 value={recorder}
                 onChange={(e) => setRecorder(e.target.value)}
-                placeholder="שמך"
                 className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-              />
+              >
+                <option value="">בחר רושם</option>
+                {approvalOptions.map(person => (
+                  <option key={person} value={person}>{person}</option>
+                ))}
+              </select>
             </div>
           </div>
 
