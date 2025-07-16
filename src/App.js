@@ -241,7 +241,7 @@ const AttendanceApp = () => {
         formData.approvedBy
       ]];
 
-      const success = await sendToSheet('היעדויות', sheetData);
+      const success = await sendToSheet('היעדרויות', sheetData);
       if (success) {
         alert('דיווח היעדות נרשם בהצלחה וחובר לגיליון!');
       } else {
