@@ -170,6 +170,18 @@ const AttendanceApp = () => {
     
     if (!scheduleSlot) return;
 
+    // Check if attendance already recorded for this exact combination
+    const isDuplicate = attendance.some(a => 
+      a.date === selectedDate && 
+      a.timeSlot === selectedTimeSlot && 
+      a.scheduleId === scheduleSlot.id
+    );
+
+    if (isDuplicate) {
+      alert('נוכחות כבר נרשמה עבור שעה זו!');
+      return;
+    }
+
     const relevantStudents = selectedGroup === 'כולם' ? 
       students : 
       students.filter(s => s.group === selectedGroup);
