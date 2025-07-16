@@ -965,6 +965,3 @@ export default AttendanceApp;grid-cols-2 lg:grid-cols-3 gap-3">
           <h2 className="text-xl font-semibold mb-4">דיווח היעדות חדשה</h2>
           
           <div className="grid grid-cols-1 md:
-export default AttendanceApp;
-
-
