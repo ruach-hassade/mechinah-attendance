@@ -140,11 +140,19 @@ const AttendanceApp = () => {
   // Calculate attendance statistics
   const calculateAttendanceStats = (studentId) => {
     const studentAttendance = attendance.filter(a => a.studentId === studentId);
-    const expectedLessons = schedule.filter(s => 
-      s.group === 'כולם' || s.group === students.find(st => st.id === studentId)?.group
-    );
     
-    const relevantLessons = expectedLessons.filter(lesson => 
+    // Get only lessons that actually happened (have attendance records)
+    const actualLessons = attendance
+      .map(a => a.scheduleId)
+      .filter((scheduleId, index, arr) => arr.indexOf(scheduleId) === index) // Remove duplicates
+      .map(scheduleId => schedule.find(s => s.id === scheduleId))
+      .filter(lesson => lesson && (
+        lesson.group === 'כולם' || 
+        lesson.group === students.find(st => st.id === studentId)?.group
+      ));
+    
+    // Filter out lessons where student was legitimately absent
+    const relevantLessons = actualLessons.filter(lesson => 
       !isStudentAbsent(studentId, lesson.date, lesson.timeSlot)
     );
     
@@ -155,7 +163,7 @@ const AttendanceApp = () => {
       percentage,
       presentCount,
       expectedLessons: relevantLessons.length,
-      totalLessons: expectedLessons.length,
+      totalLessons: actualLessons.length,
       status: percentage < 80 ? 'critical' : percentage < 90 ? 'warning' : 'good'
     };
   };
@@ -425,17 +433,6 @@ const AttendanceApp = () => {
   const TakeAttendance = () => {
     const [presentStudents, setPresentStudents] = useState([]);
 
-    // Check if attendance already exists for this slot
-    const attendanceExists = attendance.some(a => {
-      const scheduleSlot = schedule.find(s => 
-        s.date === selectedDate && 
-        s.timeSlot === selectedTimeSlot && 
-        s.group === selectedGroup
-      );
-      
-      return scheduleSlot && a.scheduleId === scheduleSlot.id;
-    });
-
     const handleStudentToggle = (studentId) => {
       setPresentStudents(prev => 
         prev.includes(studentId) 
@@ -447,11 +444,6 @@ const AttendanceApp = () => {
     const handleSubmit = async () => {
       if (!recorder.trim()) {
         alert('אנא בחר רושם');
-        return;
-      }
-
-      if (attendanceExists) {
-        alert('נוכחות כבר נרשמה עבור שעה זו!');
         return;
       }
       
@@ -487,18 +479,7 @@ const AttendanceApp = () => {
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <h2 className="text-xl font-semibold mb-4 text-amber-800">רישום נוכחות</h2>
           
-          {attendanceExists && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-              <div className="flex items-center space-x-2 space-x-reverse">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-                <span className="text-red-800 font-medium">
-                  נוכחות כבר נרשמה עבור שעה זו!
-                </span>
-              </div>
-            </div>
-          )}
-          
-          {autoTimeSlot && !attendanceExists && (
+          {autoTimeSlot && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2 space-x-reverse">
@@ -610,7 +591,6 @@ const AttendanceApp = () => {
                       checked={presentStudents.includes(student.id)}
                       onChange={() => handleStudentToggle(student.id)}
                       className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
-                      disabled={attendanceExists}
                     />
                     <span className="text-sm">{student.name}</span>
                     <span className={`px-2 py-1 rounded text-xs ${
@@ -628,21 +608,21 @@ const AttendanceApp = () => {
             <button
               onClick={() => setPresentStudents(studentsInAcademy.map(s => s.id))}
               className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300"
-              disabled={studentsInAcademy.length === 0 || isLoading || attendanceExists}
+              disabled={studentsInAcademy.length === 0 || isLoading}
             >
               בחר הכל
             </button>
             <button
               onClick={() => setPresentStudents([])}
               className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300"
-              disabled={isLoading || attendanceExists}
+              disabled={isLoading}
             >
               נקה הכל
             </button>
             <button
               onClick={handleSubmit}
               className="px-6 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:bg-amber-300"
-              disabled={studentsInAcademy.length === 0 || isLoading || attendanceExists}
+              disabled={studentsInAcademy.length === 0 || isLoading}
             >
               {isLoading ? 'שולח...' : 'שלח נוכחות'}
             </button>
