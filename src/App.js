@@ -2,6 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { Users, Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Plus, Search, Filter, Download } from 'lucide-react';
 
 const AttendanceApp = () => {
+  // Google Sheets configuration
+  const SHEET_ID = '1zvdysWI4pZ_yh_uUCh7fFx17CQTU23pHYOIfAlx0SAI';
+  const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit#gid=`;
+  
+  // Helper function to send data to Google Sheets
+  const sendToSheet = async (sheetName, data) => {
+    try {
+      const response = await fetch(`https://script.google.com/macros/s/AKfycbz0l6_ggK802nEXaSM8Xs90SDV6KUPa6AParwkcZ4--niNo3BEH-5l1De-YgUIq3e8_cw/exec`, {
+        method: 'POST',
+        body: JSON.stringify({
+          sheet: sheetName,
+          data: data
+        })
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Error sending to sheet:', error);
+      return false;
+    }
+  };
+
   // Time slots
   const timeSlots = ['07:30', '09:00', '12:15', '15:30', '16:45', '17:45', '20:00'];
   
@@ -57,6 +78,7 @@ const AttendanceApp = () => {
   const [recorder, setRecorder] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [autoTimeSlot, setAutoTimeSlot] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Absence approval options
   const approvalOptions = ['הרב אילעאי', 'הרב שובי', 'בועז', 'עמית'];
@@ -143,8 +165,8 @@ const AttendanceApp = () => {
     };
   };
 
-  // Handle attendance submission with absence checking
-  const handleAttendanceSubmission = (presentStudents) => {
+  // Handle attendance submission with Google Sheets integration
+  const handleAttendanceSubmission = async (presentStudents) => {
     const scheduleSlot = schedule.find(s => 
       s.date === selectedDate && 
       s.timeSlot === selectedTimeSlot && 
@@ -173,10 +195,74 @@ const AttendanceApp = () => {
       timeSlot: selectedTimeSlot
     }));
 
+    // Update local state
     setAttendance(prev => [
       ...prev.filter(a => !newAttendanceRecords.some(n => n.id === a.id)),
       ...newAttendanceRecords
     ]);
+
+    // Send to Google Sheets
+    setIsLoading(true);
+    try {
+      const sheetData = newAttendanceRecords.map(record => [
+        record.date,
+        record.timeSlot,
+        record.studentId,
+        record.present ? 'נוכח' : 'לא נוכח',
+        record.recorder,
+        new Date(record.timestamp).toLocaleString('he-IL')
+      ]);
+
+      const success = await sendToSheet('נוכחות', sheetData);
+      if (success) {
+        alert('הנוכחות נרשמה בהצלחה וחוברה לגיליון!');
+      } else {
+        alert('הנוכחות נרשמה מקומית, אך לא הצליח לחבר לגיליון. נסה שוב.');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('הנוכחות נרשמה מקומית, אך לא הצליח לחבר לגיליון.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle absence submission with Google Sheets integration
+  const handleAbsenceSubmission = async (formData) => {
+    const newAbsence = {
+      id: `absence-${Date.now()}`,
+      ...formData,
+      createdAt: new Date().toISOString()
+    };
+
+    // Update local state
+    setAbsences(prev => [...prev, newAbsence]);
+
+    // Send to Google Sheets
+    setIsLoading(true);
+    try {
+      const sheetData = [[
+        formData.studentId,
+        formData.departureDate,
+        formData.departureTime,
+        formData.returnDate,
+        formData.returnTime,
+        formData.purpose,
+        formData.approvedBy
+      ]];
+
+      const success = await sendToSheet('היעדויות', sheetData);
+      if (success) {
+        alert('דיווח היעדות נרשם בהצלחה וחובר לגיליון!');
+      } else {
+        alert('דיווח היעדות נרשם מקומית, אך לא הצליח לחבר לגיליון. נסה שוב.');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('דיווח היעדות נרשם מקומית, אך לא הצליח לחבר לגיליון.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Filter students based on search
@@ -241,6 +327,21 @@ const AttendanceApp = () => {
           </div>
         </div>
 
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 className="font-semibold text-blue-800 mb-2">🔗 גיליון Google Sheets</h3>
+          <p className="text-blue-700 text-sm mb-2">
+            כל הנתונים נשמרים באופן אוטומטי בגיליון Google Sheets
+          </p>
+          <a 
+            href={SHEET_URL} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="inline-flex items-center px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+          >
+            פתח גיליון
+          </a>
+        </div>
+
         {lowAttendanceStudents.length > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <h3 className="font-semibold text-red-800 mb-2">⚠️ חניכים הדורשים תשומת לב</h3>
@@ -264,323 +365,6 @@ const AttendanceApp = () => {
 
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <h3 className="font-semibold text-gray-800 mb-4">מערכת שעות היום</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {todaySchedule.map(lesson => {
-              const lessonAttendance = todayAttendance.filter(a => a.scheduleId === lesson.id);
-              const attendanceRate = lessonAttendance.length > 0 ? 
-                Math.round((lessonAttendance.filter(a => a.present).length / lessonAttendance.length) * 100) : 0;
-              
-              return (
-                <div key={lesson.id} className="border border-gray-200 rounded p-3">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="font-medium text-sm">{lesson.timeSlot}</span>
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      lesson.group === 'כולם' ? 'bg-blue-100 text-blue-800' : 
-                      lesson.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 
-                      'bg-purple-100 text-purple-800'
-                    }`}>
-                      {lesson.group}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 mb-2">{lesson.description}</p>
-                  {lessonAttendance.length > 0 && (
-                    <div className="text-xs text-gray-500">
-                      נוכחות: {attendanceRate}%
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Take Attendance Component
-  const TakeAttendance = () => {
-    const [presentStudents, setPresentStudents] = useState([]);
-
-    const handleStudentToggle = (studentId) => {
-      setPresentStudents(prev => 
-        prev.includes(studentId) 
-          ? prev.filter(id => id !== studentId)
-          : [...prev, studentId]
-      );
-    };
-
-    const handleSubmit = () => {
-      if (!recorder.trim()) {
-        alert('אנא הזן שם הרושם');
-        return;
-      }
-      
-      handleAttendanceSubmission(presentStudents);
-      setPresentStudents([]);
-      setRecorder('');
-      alert('הנוכחות נרשמה בהצלחה!');
-    };
-
-    // Calculate students for this attendance session
-    const relevantStudents = selectedGroup === 'כולם' ? 
-      students : 
-      students.filter(s => s.group === selectedGroup);
-
-    // Filter out students who are currently absent from academy
-    const studentsInAcademy = relevantStudents.filter(student => 
-      !isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
-    );
-
-    const studentsCurrentlyOut = relevantStudents.filter(student => 
-      isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
-    );
-
-    // Get current time info for display
-    const getCurrentTimeInfo = () => {
-      const now = new Date();
-      const timeString = now.toLocaleTimeString('he-IL', { 
-        hour12: false, 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-      return timeString;
-    };
-
-    return (
-      <div className="space-y-6" dir="rtl">
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">רישום נוכחות</h2>
-          
-          {/* Auto Time Slot Indicator */}
-          {autoTimeSlot && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2 space-x-reverse">
-                  <Clock className="h-5 w-5 text-blue-600" />
-                  <span className="text-blue-800 font-medium">
-                    שעה נבחרה אוטומטית: {selectedTimeSlot}
-                  </span>
-                  <span className="text-blue-600 text-sm">
-                    (השעה הנוכחית: {getCurrentTimeInfo()})
-                  </span>
-                </div>
-                <button
-                  onClick={() => setAutoTimeSlot(false)}
-                  className="text-blue-600 hover:text-blue-800 text-sm underline"
-                >
-                  בחירה ידנית
-                </button>
-              </div>
-              <p className="text-blue-700 text-sm mt-1">
-                בוחר אוטומטית את השיעור האחרון שהסתיים
-              </p>
-            </div>
-          )}
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">תאריך</label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                שעה
-                {!autoTimeSlot && (
-                  <button
-                    onClick={() => {
-                      setAutoTimeSlot(true);
-                      setSelectedTimeSlot(getCurrentTimeSlot());
-                    }}
-                    className="mr-2 text-blue-600 hover:text-blue-800 text-xs underline"
-                  >
-                    בחירה אוטומטית
-                  </button>
-                )}
-              </label>
-              <select
-                value={selectedTimeSlot}
-                onChange={(e) => {
-                  setSelectedTimeSlot(e.target.value);
-                  setAutoTimeSlot(false);
-                }}
-                disabled={autoTimeSlot}
-                className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 ${
-                  autoTimeSlot ? 'bg-gray-100 cursor-not-allowed' : ''
-                }`}
-              >
-                {timeSlots.map(slot => (
-                  <option key={slot} value={slot}>{slot}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">קבוצה</label>
-              <select
-                value={selectedGroup}
-                onChange={(e) => setSelectedGroup(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="כולם">כל החניכים</option>
-                <option value="קבוצה א">קבוצה א</option>
-                <option value="קבוצה ב">קבוצה ב</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">רושם</label>
-              <input
-                type="text"
-                value={recorder}
-                onChange={(e) => setRecorder(e.target.value)}
-                placeholder="שמך"
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="font-medium">חניכים נוכחים במכינה ({studentsInAcademy.length})</h3>
-              <div className="text-sm text-gray-600">
-                נבחרו: {presentStudents.length} / {studentsInAcademy.length}
-              </div>
-            </div>
-
-            {studentsCurrentlyOut.length > 0 && (
-              <div className="bg-orange-50 border border-orange-200 rounded p-3 mb-3">
-                <h4 className="font-medium text-orange-800 mb-2">חניכים שיצאו מהמכינה ({studentsCurrentlyOut.length}):</h4>
-                <div className="text-sm text-orange-700">
-                  {studentsCurrentlyOut.map(student => student.name).join(', ')}
-                </div>
-                <p className="text-xs text-orange-600 mt-1">חניכים אלו לא יירשמו בנוכחות כי הם נמצאים בהיעדות מאושרת</p>
-              </div>
-            )}
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-96 overflow-y-auto border border-gray-200 rounded p-4">
-              {studentsInAcademy.length === 0 ? (
-                <div className="col-span-full text-center text-gray-500 py-4">
-                  {studentsCurrentlyOut.length > 0 ? 
-                    "כל החניכים בקבוצה זו נמצאים בהיעדות" : 
-                    "אין חניכים בקבוצה זו"}
-                </div>
-              ) : (
-                studentsInAcademy.map(student => (
-                  <label key={student.id} className="flex items-center space-x-2 space-x-reverse p-2 hover:bg-gray-50 rounded cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={presentStudents.includes(student.id)}
-                      onChange={() => handleStudentToggle(student.id)}
-                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm">{student.name}</span>
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      student.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 'bg-purple-100 text-purple-800'
-                    }`}>
-                      {student.group}
-                    </span>
-                  </label>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="flex justify-between">
-            <button
-              onClick={() => setPresentStudents(studentsInAcademy.map(s => s.id))}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-              disabled={studentsInAcademy.length === 0}
-            >
-              בחר הכל
-            </button>
-            <button
-              onClick={() => setPresentStudents([])}
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-            >
-              נקה הכל
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              disabled={studentsInAcademy.length === 0}
-            >
-              שלח נוכחות
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Absence Reporting Component
-  const AbsenceReporting = () => {
-    const [formData, setFormData] = useState({
-      studentId: '',
-      departureDate: new Date().toISOString().split('T')[0],
-      departureTime: '08:00',
-      returnDate: new Date().toISOString().split('T')[0],
-      returnTime: '17:00',
-      purpose: '',
-      approvedBy: ''
-    });
-
-    const handleInputChange = (field, value) => {
-      setFormData(prev => ({
-        ...prev,
-        [field]: value
-      }));
-    };
-
-    const handleSubmit = () => {
-      if (!formData.studentId || !formData.purpose || !formData.approvedBy) {
-        alert('אנא מלא את כל השדות הנדרשים');
-        return;
-      }
-
-      const newAbsence = {
-        id: `absence-${Date.now()}`,
-        ...formData,
-        createdAt: new Date().toISOString()
-      };
-
-      setAbsences(prev => [...prev, newAbsence]);
-      
-      // Reset form
-      setFormData({
-        studentId: '',
-        departureDate: new Date().toISOString().split('T')[0],
-        departureTime: '08:00',
-        returnDate: new Date().toISOString().split('T')[0],
-        returnTime: '17:00',
-        purpose: '',
-        approvedBy: ''
-      });
-
-      alert('דיווח היעדות נרשם בהצלחה!');
-    };
-
-    const getCurrentAbsences = () => {
-      const now = new Date();
-      return absences.filter(absence => {
-        const returnDateTime = new Date(`${absence.returnDate} ${absence.returnTime}`);
-        return returnDateTime >= now;
-      });
-    };
-
-    const currentAbsences = getCurrentAbsences();
-
-    return (
-      <div className="space-y-6" dir="rtl">
-        {/* Report New Absence Form */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">דיווח היעדות חדשה</h2>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">חניך</label>
@@ -666,9 +450,10 @@ const AttendanceApp = () => {
 
           <button
             onClick={handleSubmit}
-            className="w-full px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="w-full px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300"
+            disabled={isLoading}
           >
-            דווח היעדות
+            {isLoading ? 'שולח...' : 'דווח היעדות'}
           </button>
         </div>
 
@@ -869,6 +654,317 @@ const AttendanceApp = () => {
     </div>
   );
 };
+
+export default AttendanceApp;grid-cols-2 lg:grid-cols-3 gap-3">
+            {todaySchedule.map(lesson => {
+              const lessonAttendance = todayAttendance.filter(a => a.scheduleId === lesson.id);
+              const attendanceRate = lessonAttendance.length > 0 ? 
+                Math.round((lessonAttendance.filter(a => a.present).length / lessonAttendance.length) * 100) : 0;
+              
+              return (
+                <div key={lesson.id} className="border border-gray-200 rounded p-3">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-medium text-sm">{lesson.timeSlot}</span>
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      lesson.group === 'כולם' ? 'bg-blue-100 text-blue-800' : 
+                      lesson.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 
+                      'bg-purple-100 text-purple-800'
+                    }`}>
+                      {lesson.group}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 mb-2">{lesson.description}</p>
+                  {lessonAttendance.length > 0 && (
+                    <div className="text-xs text-gray-500">
+                      נוכחות: {attendanceRate}%
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Take Attendance Component
+  const TakeAttendance = () => {
+    const [presentStudents, setPresentStudents] = useState([]);
+
+    const handleStudentToggle = (studentId) => {
+      setPresentStudents(prev => 
+        prev.includes(studentId) 
+          ? prev.filter(id => id !== studentId)
+          : [...prev, studentId]
+      );
+    };
+
+    const handleSubmit = async () => {
+      if (!recorder.trim()) {
+        alert('אנא הזן שם הרושם');
+        return;
+      }
+      
+      await handleAttendanceSubmission(presentStudents);
+      setPresentStudents([]);
+      setRecorder('');
+    };
+
+    // Calculate students for this attendance session
+    const relevantStudents = selectedGroup === 'כולם' ? 
+      students : 
+      students.filter(s => s.group === selectedGroup);
+
+    // Filter out students who are currently absent from academy
+    const studentsInAcademy = relevantStudents.filter(student => 
+      !isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
+    );
+
+    const studentsCurrentlyOut = relevantStudents.filter(student => 
+      isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
+    );
+
+    // Get current time info for display
+    const getCurrentTimeInfo = () => {
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('he-IL', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      return timeString;
+    };
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4">רישום נוכחות</h2>
+          
+          {/* Auto Time Slot Indicator */}
+          {autoTimeSlot && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <Clock className="h-5 w-5 text-blue-600" />
+                  <span className="text-blue-800 font-medium">
+                    שעה נבחרה אוטומטית: {selectedTimeSlot}
+                  </span>
+                  <span className="text-blue-600 text-sm">
+                    (השעה הנוכחית: {getCurrentTimeInfo()})
+                  </span>
+                </div>
+                <button
+                  onClick={() => setAutoTimeSlot(false)}
+                  className="text-blue-600 hover:text-blue-800 text-sm underline"
+                >
+                  בחירה ידנית
+                </button>
+              </div>
+              <p className="text-blue-700 text-sm mt-1">
+                בוחר אוטומטית את השיעור האחרון שהסתיים
+              </p>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">תאריך</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                שעה
+                {!autoTimeSlot && (
+                  <button
+                    onClick={() => {
+                      setAutoTimeSlot(true);
+                      setSelectedTimeSlot(getCurrentTimeSlot());
+                    }}
+                    className="mr-2 text-blue-600 hover:text-blue-800 text-xs underline"
+                  >
+                    בחירה אוטומטית
+                  </button>
+                )}
+              </label>
+              <select
+                value={selectedTimeSlot}
+                onChange={(e) => {
+                  setSelectedTimeSlot(e.target.value);
+                  setAutoTimeSlot(false);
+                }}
+                disabled={autoTimeSlot}
+                className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 ${
+                  autoTimeSlot ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
+              >
+                {timeSlots.map(slot => (
+                  <option key={slot} value={slot}>{slot}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">קבוצה</label>
+              <select
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="כולם">כל החניכים</option>
+                <option value="קבוצה א">קבוצה א</option>
+                <option value="קבוצה ב">קבוצה ב</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">רושם</label>
+              <input
+                type="text"
+                value={recorder}
+                onChange={(e) => setRecorder(e.target.value)}
+                placeholder="שמך"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-medium">חניכים נוכחים במכינה ({studentsInAcademy.length})</h3>
+              <div className="text-sm text-gray-600">
+                נבחרו: {presentStudents.length} / {studentsInAcademy.length}
+              </div>
+            </div>
+
+            {studentsCurrentlyOut.length > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded p-3 mb-3">
+                <h4 className="font-medium text-orange-800 mb-2">חניכים שיצאו מהמכינה ({studentsCurrentlyOut.length}):</h4>
+                <div className="text-sm text-orange-700">
+                  {studentsCurrentlyOut.map(student => student.name).join(', ')}
+                </div>
+                <p className="text-xs text-orange-600 mt-1">חניכים אלו לא יירשמו בנוכחות כי הם נמצאים בהיעדות מאושרת</p>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-96 overflow-y-auto border border-gray-200 rounded p-4">
+              {studentsInAcademy.length === 0 ? (
+                <div className="col-span-full text-center text-gray-500 py-4">
+                  {studentsCurrentlyOut.length > 0 ? 
+                    "כל החניכים בקבוצה זו נמצאים בהיעדות" : 
+                    "אין חניכים בקבוצה זו"}
+                </div>
+              ) : (
+                studentsInAcademy.map(student => (
+                  <label key={student.id} className="flex items-center space-x-2 space-x-reverse p-2 hover:bg-gray-50 rounded cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={presentStudents.includes(student.id)}
+                      onChange={() => handleStudentToggle(student.id)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm">{student.name}</span>
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      student.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 'bg-purple-100 text-purple-800'
+                    }`}>
+                      {student.group}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-between">
+            <button
+              onClick={() => setPresentStudents(studentsInAcademy.map(s => s.id))}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              disabled={studentsInAcademy.length === 0 || isLoading}
+            >
+              בחר הכל
+            </button>
+            <button
+              onClick={() => setPresentStudents([])}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              disabled={isLoading}
+            >
+              נקה הכל
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300"
+              disabled={studentsInAcademy.length === 0 || isLoading}
+            >
+              {isLoading ? 'שולח...' : 'שלח נוכחות'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Absence Reporting Component
+  const AbsenceReporting = () => {
+    const [formData, setFormData] = useState({
+      studentId: '',
+      departureDate: new Date().toISOString().split('T')[0],
+      departureTime: '08:00',
+      returnDate: new Date().toISOString().split('T')[0],
+      returnTime: '17:00',
+      purpose: '',
+      approvedBy: ''
+    });
+
+    const handleInputChange = (field, value) => {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    };
+
+    const handleSubmit = async () => {
+      if (!formData.studentId || !formData.purpose || !formData.approvedBy) {
+        alert('אנא מלא את כל השדות הנדרשים');
+        return;
+      }
+
+      await handleAbsenceSubmission(formData);
+      
+      // Reset form
+      setFormData({
+        studentId: '',
+        departureDate: new Date().toISOString().split('T')[0],
+        departureTime: '08:00',
+        returnDate: new Date().toISOString().split('T')[0],
+        returnTime: '17:00',
+        purpose: '',
+        approvedBy: ''
+      });
+    };
+
+    const getCurrentAbsences = () => {
+      const now = new Date();
+      return absences.filter(absence => {
+        const returnDateTime = new Date(`${absence.returnDate} ${absence.returnTime}`);
+        return returnDateTime >= now;
+      });
+    };
+
+    const currentAbsences = getCurrentAbsences();
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        {/* Report New Absence Form */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4">דיווח היעדות חדשה</h2>
+          
+          <div className="grid grid-cols-1 md:
 export default AttendanceApp;
 
 
