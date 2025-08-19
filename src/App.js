@@ -23,6 +23,356 @@ const AttendanceApp = () => {
     }
   };
 
+  // Students Management Component - Updated for current year
+  const StudentsManagement = () => {
+    const [editingStudent, setEditingStudent] = useState(null);
+    const [editForm, setEditForm] = useState({ name: '', group: '', room: '' });
+    const [newStudent, setNewStudent] = useState({ name: '', group: null, room: null });
+    const [showAddForm, setShowAddForm] = useState(false);
+
+    const currentYearStudents = getCurrentYearStudents();
+
+    const handleEditStart = (student) => {
+      setEditingStudent(student.id);
+      setEditForm({ 
+        name: student.name, 
+        group: student.group || '', 
+        room: student.room || '' 
+      });
+    };
+
+    const handleEditSave = () => {
+      if (!editForm.name.trim()) {
+        alert('נא להזין שם חניך');
+        return;
+      }
+
+      const updatedStudents = students.map(student =>
+        student.id === editingStudent
+          ? { 
+              ...student, 
+              name: editForm.name.trim(), 
+              group: editForm.group || null,
+              room: editForm.room || null
+            }
+          : student
+      );
+
+      handleStudentUpdate(updatedStudents);
+      setEditingStudent(null);
+      setEditForm({ name: '', group: '', room: '' });
+    };
+
+    const handleEditCancel = () => {
+      setEditingStudent(null);
+      setEditForm({ name: '', group: '', room: '' });
+    };
+
+    const handleDelete = (studentId) => {
+      if (window.confirm('האם אתה בטוח שברצונך למחוק את החניך?')) {
+        const updatedStudents = students.filter(s => s.id !== studentId);
+        handleStudentUpdate(updatedStudents);
+      }
+    };
+
+    const handleAddStudent = () => {
+      if (!newStudent.name.trim()) {
+        alert('נא להזין שם חניך');
+        return;
+      }
+
+      const newId = Math.max(...students.map(s => s.id), 0) + 1;
+      const updatedStudents = [...students, {
+        id: newId,
+        name: newStudent.name.trim(),
+        year: currentYear,
+        group: newStudent.group || null,
+        room: newStudent.room || null
+      }];
+
+      handleStudentUpdate(updatedStudents);
+      setNewStudent({ name: '', group: null, room: null });
+      setShowAddForm(false);
+    };
+
+    const handleMoveToGroup = (studentId, newGroup) => {
+      const updatedStudents = students.map(student =>
+        student.id === studentId
+          ? { ...student, group: newGroup }
+          : student
+      );
+      handleStudentUpdate(updatedStudents);
+    };
+
+    const resetToRealData = () => {
+      if (window.confirm('האם אתה בטוח שברצונך לאפס את הרשימה לנתונים המקוריים? כל השינויים יאבדו.')) {
+        handleStudentUpdate(allStudentsData);
+      }
+    };
+
+    // Group students by their group assignment for שנה א
+    const groupAStudents = currentYearStudents.filter(s => s.group === 'א"ב');
+    const groupBStudents = currentYearStudents.filter(s => s.group === 'ש"פ');
+    const unassignedStudents = currentYearStudents.filter(s => !s.group);
+
+    // Student Card Component
+    const StudentCard = ({ student, borderColor }) => (
+      <div className={`bg-white border border-${borderColor}-200 rounded p-3`}>
+        {editingStudent === student.id ? (
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={editForm.name}
+              onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+              className={`w-full p-2 border border-${borderColor}-300 rounded text-sm`}
+              placeholder="שם החניך"
+            />
+            {currentYear === "א" && (
+              <select
+                value={editForm.group}
+                onChange={(e) => setEditForm(prev => ({ ...prev, group: e.target.value }))}
+                className={`w-full p-2 border border-${borderColor}-300 rounded text-sm`}
+              >
+                <option value="">בחר קבוצה</option>
+                <option value="א״ב">קבוצת א"ב</option>
+                <option value="ש״פ">קבוצת ש"פ</option>
+              </select>
+            )}
+            <input
+              type="text"
+              value={editForm.room}
+              onChange={(e) => setEditForm(prev => ({ ...prev, room: e.target.value }))}
+              className={`w-full p-2 border border-${borderColor}-300 rounded text-sm`}
+              placeholder="חדר"
+            />
+            <div className="flex space-x-2 space-x-reverse">
+              <button
+                onClick={handleEditSave}
+                className="px-3 py-1 bg-amber-600 text-white rounded text-sm hover:bg-amber-700"
+                disabled={isLoading}
+              >
+                שמור
+              </button>
+              <button
+                onClick={handleEditCancel}
+                className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <span className="font-medium text-sm block">{student.name}</span>
+              <span className="text-xs text-gray-500">ID: {student.id}</span>
+              {student.room && (
+                <span className="text-xs text-gray-600 block">חדר: {student.room}</span>
+              )}
+            </div>
+            <div className="flex flex-col space-y-1">
+              <button
+                onClick={() => handleEditStart(student)}
+                className="text-blue-600 hover:text-blue-800 text-xs p-1"
+                title="ערוך"
+              >
+                <Edit className="h-3 w-3" />
+              </button>
+              {currentYear === "א" && (
+                <button
+                  onClick={() => handleMoveToGroup(student.id, student.group === 'א"ב' ? 'ש"פ' : 'א"ב')}
+                  className="text-orange-600 hover:text-orange-800 text-xs"
+                  title={`העבר ל${student.group === 'א"ב' ? 'ש"פ' : 'א"ב'}`}
+                >
+                  ↔
+                </button>
+              )}
+              <button
+                onClick={() => handleDelete(student.id)}
+                className="text-red-600 hover:text-red-800 text-xs p-1"
+                title="מחק"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        {/* Year Header */}
+        <div className="bg-gradient-to-r from-amber-50 to-green-50 border border-amber-200 rounded-lg p-4">
+          <h2 className="text-2xl font-bold text-amber-800 mb-2">
+            ניהול חניכים - שנה {currentYear}
+          </h2>
+          <p className="text-amber-700">
+            {currentYear === "א" ? "מחזור ט - שנה ראשונה" : "מחזור ח - שנה שנייה"}
+          </p>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-amber-800">ניהול רשימת חניכים</h3>
+            <div className="flex space-x-2 space-x-reverse">
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center space-x-1 space-x-reverse"
+              >
+                <Plus className="h-4 w-4" />
+                <span>הוסף חניך</span>
+              </button>
+              <button
+                onClick={resetToRealData}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center space-x-1 space-x-reverse"
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span>אפס לנתונים מקוריים</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Statistics */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+              <div className="text-center">
+                <p className="text-sm font-medium text-amber-700">סך החניכים</p>
+                <p className="text-2xl font-bold text-amber-900">{currentYearStudents.length}</p>
+              </div>
+            </div>
+            {currentYear === "א" && (
+              <>
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-blue-700">קבוצת א"ב</p>
+                    <p className="text-2xl font-bold text-blue-900">{groupAStudents.length}</p>
+                  </div>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-purple-700">קבוצת ש"פ</p>
+                    <p className="text-2xl font-bold text-purple-900">{groupBStudents.length}</p>
+                  </div>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-700">לא משויכים</p>
+                    <p className="text-2xl font-bold text-gray-900">{unassignedStudents.length}</p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {showAddForm && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <h4 className="font-semibold text-green-800 mb-3">הוספת חניך חדש</h4>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input
+                  type="text"
+                  placeholder="שם החניך"
+                  value={newStudent.name}
+                  onChange={(e) => setNewStudent(prev => ({ ...prev, name: e.target.value }))}
+                  className="p-2 border border-green-300 rounded focus:ring-2 focus:ring-green-500"
+                />
+                {currentYear === "א" && (
+                  <select
+                    value={newStudent.group || ''}
+                    onChange={(e) => setNewStudent(prev => ({ ...prev, group: e.target.value || null }))}
+                    className="p-2 border border-green-300 rounded focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">בחר קבוצה</option>
+                    <option value="א״ב">קבוצת א"ב</option>
+                    <option value="ש״פ">קבוצת ש"פ</option>
+                  </select>
+                )}
+                <input
+                  type="text"
+                  placeholder="חדר (אופציונלי)"
+                  value={newStudent.room || ''}
+                  onChange={(e) => setNewStudent(prev => ({ ...prev, room: e.target.value || null }))}
+                  className="p-2 border border-green-300 rounded focus:ring-2 focus:ring-green-500"
+                />
+                <div className="flex space-x-2 space-x-reverse">
+                  <button
+                    onClick={handleAddStudent}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                    disabled={isLoading}
+                  >
+                    הוסף
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setNewStudent({ name: '', group: null, room: null });
+                    }}
+                    className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  >
+                    ביטול
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Students List */}
+          {currentYear === "א" ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* קבוצת א"ב */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-800 mb-3">
+                  קבוצת א"ב ({groupAStudents.length})
+                </h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {groupAStudents.map(student => (
+                    <StudentCard key={student.id} student={student} borderColor="blue" />
+                  ))}
+                </div>
+              </div>
+
+              {/* קבוצת ש"פ */}
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <h4 className="font-semibold text-purple-800 mb-3">
+                  קבוצת ש"פ ({groupBStudents.length})
+                </h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {groupBStudents.map(student => (
+                    <StudentCard key={student.id} student={student} borderColor="purple" />
+                  ))}
+                </div>
+              </div>
+
+              {/* לא משויכים */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h4 className="font-semibold text-gray-800 mb-3">
+                  לא משויכים ({unassignedStudents.length})
+                </h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {unassignedStudents.map(student => (
+                    <StudentCard key={student.id} student={student} borderColor="gray" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* שנה ב - רשימה אחת */
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <h4 className="font-semibold text-green-800 mb-3">
+                חניכי שנה ב ({currentYearStudents.length})
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {currentYearStudents.map(student => (
+                  <StudentCard key={student.id} student={student} borderColor="green" />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Students Overview Component - Updated for current year
   const StudentsOverview = () => {
     const currentYearStudents = getCurrentYearStudents();
@@ -1399,6 +1749,7 @@ const AttendanceApp = () => {
         {currentView === 'attendance' && <TakeAttendance />}
         {currentView === 'absences' && <AbsenceReporting />}
         {currentView === 'students' && <StudentsOverview />}
+        {currentView === 'manage-students' && <StudentsManagement />}
 
         {/* Footer Info */}
         <div className="mt-8 text-center text-gray-500 text-xs">
