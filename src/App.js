@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Plus, Search, Filter, Download } from 'lucide-react';
+import { Users, Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Plus, Search, Filter, Download, RefreshCw } from 'lucide-react';
 
 const AttendanceApp = () => {
   // Google Sheets configuration
   const SHEET_ID = '1zvdysWI4pZ_yh_uUCh7fFx17CQTU23pHYOIfAlx0SAI';
   const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit#gid=`;
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxOmIcAmH_56ATurOxS91xqTxGDvtKYGzzdldiJbZYRCzp3Y5YY95MYl9d_a47RNefDvA/exec';
   
   // Helper function to send data to Google Sheets
   const sendToSheet = async (sheetName, data) => {
     try {
-      const response = await fetch(`https://script.google.com/macros/s/AKfycbz0l6_ggK802nEXaSM8Xs90SDV6KUPa6AParwkcZ4--niNo3BEH-5l1De-YgUIq3e8_cw/exec`, {
+      const response = await fetch(SCRIPT_URL, {
         method: 'POST',
         body: JSON.stringify({
+          action: 'write',
           sheet: sheetName,
           data: data
         })
@@ -20,6 +22,24 @@ const AttendanceApp = () => {
     } catch (error) {
       console.error('Error sending to sheet:', error);
       return false;
+    }
+  };
+
+  // Helper function to load data from Google Sheets
+  const loadFromSheet = async (sheetName) => {
+    try {
+      const response = await fetch(`${SCRIPT_URL}?action=read&sheet=${sheetName}`, {
+        method: 'GET'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data.data || [];
+      }
+      return [];
+    } catch (error) {
+      console.error(`Error loading from sheet ${sheetName}:`, error);
+      return [];
     }
   };
 
@@ -77,9 +97,90 @@ const AttendanceApp = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [autoTimeSlot, setAutoTimeSlot] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState('');
 
   // Staff and approval options
   const approvalOptions = ['הרב איתמר', 'הרב אילעאי', 'בועז', 'הרב שובי', 'עמית', 'הרב יונדב', 'אסף', 'יהודה'];
+
+  // Parse attendance data from sheets
+  const parseAttendanceData = (sheetData) => {
+    return sheetData.map((row, index) => {
+      if (row.length >= 6) {
+        const [date, timeSlot, studentId, present, recorder, timestamp] = row;
+        return {
+          id: `attendance-${index}`,
+          date: date,
+          timeSlot: timeSlot,
+          studentId: parseInt(studentId),
+          present: present === 'נוכח',
+          recorder: recorder,
+          timestamp: timestamp,
+          scheduleId: `${date}-${timeSlot}-כולם` // Default assumption
+        };
+      }
+      return null;
+    }).filter(item => item !== null);
+  };
+
+  // Parse absence data from sheets
+  const parseAbsenceData = (sheetData) => {
+    return sheetData.map((row, index) => {
+      if (row.length >= 7) {
+        const [studentId, departureDate, departureTime, returnDate, returnTime, purpose, approvedBy] = row;
+        return {
+          id: `absence-${index}`,
+          studentId: parseInt(studentId),
+          departureDate: departureDate,
+          departureTime: departureTime,
+          returnDate: returnDate,
+          returnTime: returnTime,
+          purpose: purpose,
+          approvedBy: approvedBy,
+          createdAt: new Date().toISOString()
+        };
+      }
+      return null;
+    }).filter(item => item !== null);
+  };
+
+  // Load all data from Google Sheets
+  const loadAllData = async () => {
+    setIsLoading(true);
+    setLoadingStatus('טוען נתונים מהגיליון...');
+    
+    try {
+      // Load attendance data
+      setLoadingStatus('טוען נתוני נוכחות...');
+      const attendanceData = await loadFromSheet('נוכחות');
+      const parsedAttendance = parseAttendanceData(attendanceData);
+      setAttendance(parsedAttendance);
+      
+      // Load absence data
+      setLoadingStatus('טוען נתוני היעדרויות...');
+      const absenceData = await loadFromSheet('היעדרויות');
+      const parsedAbsences = parseAbsenceData(absenceData);
+      setAbsences(parsedAbsences);
+      
+      setIsDataLoaded(true);
+      setLoadingStatus('');
+      console.log('Data loaded successfully!');
+      console.log('Attendance records:', parsedAttendance.length);
+      console.log('Absence records:', parsedAbsences.length);
+      
+    } catch (error) {
+      console.error('Error loading data:', error);
+      setLoadingStatus('שגיאה בטעינת נתונים - נעבוד עם נתונים מקומיים');
+      setTimeout(() => setLoadingStatus(''), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load data on component mount
+  useEffect(() => {
+    loadAllData();
+  }, []);
 
   // Auto-update time slot every minute
   useEffect(() => {
@@ -302,6 +403,16 @@ const AttendanceApp = () => {
     </svg>
   );
 
+  // Loading component
+  const LoadingIndicator = () => (
+    <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 flex items-center space-x-3 space-x-reverse">
+        <RefreshCw className="h-6 w-6 text-amber-600 animate-spin" />
+        <span className="text-gray-700">{loadingStatus || 'טוען...'}</span>
+      </div>
+    </div>
+  );
+
   // Dashboard Component
   const Dashboard = () => {
     const todayAttendance = attendance.filter(a => a.date === selectedDate);
@@ -316,6 +427,29 @@ const AttendanceApp = () => {
 
     return (
       <div className="space-y-6" dir="rtl">
+        {/* Data status indicator */}
+        <div className={`p-3 rounded-lg border ${isDataLoaded ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 space-x-reverse">
+              <div className={`w-3 h-3 rounded-full ${isDataLoaded ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+              <span className={`text-sm font-medium ${isDataLoaded ? 'text-green-800' : 'text-yellow-800'}`}>
+                {isDataLoaded ? 'נתונים נטענו מהגיליון' : 'עובד עם נתונים מקומיים'}
+              </span>
+              <span className={`text-xs ${isDataLoaded ? 'text-green-600' : 'text-yellow-600'}`}>
+                ({attendance.length} רישומי נוכחות, {absences.length} היעדרויות)
+              </span>
+            </div>
+            <button
+              onClick={loadAllData}
+              className="flex items-center space-x-1 space-x-reverse px-3 py-1 bg-amber-600 text-white text-sm rounded hover:bg-amber-700"
+              disabled={isLoading}
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              <span>רענן נתונים</span>
+            </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
             <div className="flex items-center justify-between">
@@ -969,6 +1103,7 @@ const AttendanceApp = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-green-50">
+      {isLoading && <LoadingIndicator />}
       <Navigation />
       <div className="container mx-auto px-4 py-6">
         {currentView === 'dashboard' && <Dashboard />}
