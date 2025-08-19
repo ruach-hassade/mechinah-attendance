@@ -1,19 +1,244 @@
-import React, { useState, useEffect } from 'react';
-import { Users, Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Plus, Search, Filter, Download, RefreshCw } from 'lucide-react';
+// Take Attendance Component - Updated for current year and groups
+  const TakeAttendance = () => {
+    const [presentStudents, setPresentStudents] = useState([]);
+    const currentYearStudents = getCurrentYearStudents();
+    const groupOptions = getGroupOptions();
+
+    const handleStudentToggle = (studentId) => {
+      setPresentStudents(prev => 
+        prev.includes(studentId) 
+          ? prev.filter(id => id !== studentId)
+          : [...prev, studentId]
+      );
+    };
+
+    const handleSubmit = async () => {
+      if (!recorder.trim()) {
+        alert('אנא בחר רושם');
+        return;
+      }
+      
+      await handleAttendanceSubmission(presentStudents);
+      setPresentStudents([]);
+      setRecorder('');
+    };
+
+    // Filter students based on selected group
+    const getRelevantStudents = () => {
+      if (selectedGroup === 'כולם') {
+        return currentYearStudents;
+      } else {
+        return currentYearStudents.filter(s => s.group === selectedGroup);
+      }
+    };
+
+    const relevantStudents = getRelevantStudents();
+    
+    const studentsInAcademy = relevantStudents.filter(student => 
+      !isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
+    );
+
+    const studentsCurrentlyOut = relevantStudents.filter(student => 
+      isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
+    );
+
+    const getCurrentTimeInfo = () => {
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('he-IL', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      return timeString;
+    };
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        {/* Year Header */}
+        <div className="bg-gradient-to-r from-amber-50 to-green-50 border border-amber-200 rounded-lg p-4">
+          <h2 className="text-2xl font-bold text-amber-800 mb-2">
+            רישום נוכחות - שנה {currentYear}
+          </h2>
+          <p className="text-amber-700">
+            {currentYear === "א" ? "מחזור ט - שנה ראשונה" : "מחזור ח - שנה שנייה"}
+          </p>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          {autoTimeSlot && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <Clock className="h-5 w-5 text-amber-600" />
+                  <span className="text-amber-800 font-medium">
+                    שעה נבחרה אוטומטית: {selectedTimeSlot}
+                  </span>
+                  <span className="text-amber-600 text-sm">
+                    (השעה הנוכחית: {getCurrentTimeInfo()})
+                  </span>
+                </div>
+                <button
+                  onClick={() => setAutoTimeSlot(false)}
+                  className="text-amber-600 hover:text-amber-800 text-sm underline"
+                >
+                  בחירה ידנית
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">תאריך</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">שעה</label>
+              <select
+                value={selectedTimeSlot}
+                onChange={(e) => {
+                  setSelectedTimeSlot(e.target.value);
+                  setAutoTimeSlot(false);
+                }}
+                disabled={autoTimeSlot}
+                className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500 ${
+                  autoTimeSlot ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
+              >
+                {timeSlots.map(slot => (
+                  <option key={slot} value={slot}>{slot}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">קבוצה</label>
+              <select
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              >
+                {getGroupOptions().map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              {currentYear === "א" && (
+                <p className="text-xs text-gray-500 mt-1">
+                  הקבוצות א"ב ו-ש"פ יהיו זמינות לאחר חלוקת התלמידים
+                </p>
+              )}
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">רושם</label>
+              <select
+                value={recorder}
+                onChange={(e) => setRecorder(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="">בחר רושם</option>
+                {approvalOptions.map(person => (
+                  <option key={person} value={person}>{person}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-medium">חניכים נוכחים במכינה ({studentsInAcademy.length})</h3>
+              <div className="text-sm text-gray-600">
+                נבחרו: {presentStudents.length} / {studentsInAcademy.length}
+              </div>
+            </div>
+
+            {studentsCurrentlyOut.length > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded p-3 mb-3">
+                <h4 className="font-medium text-orange-800 mb-2">חניכים שיצאו מהמכינה ({studentsCurrentlyOut.length}):</h4>
+                <div className="text-sm text-orange-700">
+                  {studentsCurrentlyOut.map(student => student.name).join(', ')}
+                </div>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-96 overflow-y-auto border border-gray-200 rounded p-4">
+              {studentsInAcademy.length === 0 ? (
+                <div className="col-span-full text-center text-gray-500 py-4">
+                  {studentsCurrentlyOut.length > 0 ? 
+                    "כל החניכים בקבוצה זו נמצאים בהיעדרות" : 
+                    "אין חניכים בקבוצה זו"}
+                </div>
+              ) : (
+                studentsInAcademy.map(student => (
+                  <label key={student.id} className="flex items-center space-x-2 space-x-reverse p-2 hover:bg-gray-50 rounded cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={presentStudents.includes(student.id)}
+                      onChange={() => handleStudentToggle(student.id)}
+                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                    />
+                    <span className="text-sm">{student.name}</span>
+                    {student.group && (
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        student.group === 'א"ב' ? 'bg-blue-100 text-blue-800' : 
+                        student.group === 'ש"פ' ? 'bg-purple-100 text-purple-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {student.group}
+                      </span>
+                    )}
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-between">
+            <button
+              onClick={() => setPresentStudents(studentsInAcademy.map(s => s.id))}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300"
+              disabled={studentsInAcademy.length === 0 || isLoading}
+            >
+              בחר הכל
+            </button>
+            <button
+              onClick={() => setPresentStudents([])}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300"
+              disabled={isLoading}
+            >
+              נקה הכל
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="px-6 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:bg-amber-300"
+              disabled={studentsInAcademy.length === 0 || isLoading}
+            >
+              {isLoading ? 'שולח...' : 'שלח נוכחות'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };import React, { useState, useEffect } from 'react';
+import { Users, Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Plus, Search, Filter, Download, Edit, Trash2, UserPlus, RotateCcw } from 'lucide-react';
 
 const AttendanceApp = () => {
   // Google Sheets configuration
   const SHEET_ID = '1zvdysWI4pZ_yh_uUCh7fFx17CQTU23pHYOIfAlx0SAI';
   const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit#gid=`;
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxOmIcAmH_56ATurOxS91xqTxGDvtKYGzzdldiJbZYRCzp3Y5YY95MYl9d_a47RNefDvA/exec';
   
   // Helper function to send data to Google Sheets
   const sendToSheet = async (sheetName, data) => {
     try {
-      const response = await fetch(SCRIPT_URL, {
+      const response = await fetch(`https://script.google.com/macros/s/AKfycbz0l6_ggK802nEXaSM8Xs90SDV6KUPa6AParwkcZ4--niNo3BEH-5l1De-YgUIq3e8_cw/exec`, {
         method: 'POST',
         body: JSON.stringify({
-          action: 'write',
           sheet: sheetName,
           data: data
         })
@@ -25,41 +250,88 @@ const AttendanceApp = () => {
     }
   };
 
-  // Helper function to load data from Google Sheets
-  const loadFromSheet = async (sheetName) => {
-    try {
-      const response = await fetch(`${SCRIPT_URL}?action=read&sheet=${sheetName}`, {
-        method: 'GET'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        return data.data || [];
-      }
-      return [];
-    } catch (error) {
-      console.error(`Error loading from sheet ${sheetName}:`, error);
-      return [];
-    }
-  };
-
   // Time slots
   const timeSlots = ['07:30', '09:00', '12:15', '15:30', '16:45', '17:45', '20:00'];
   
-  // Initial student data (53 students) - Hebrew names
-  const initialStudents = [
-    // Group A (26 students)
-    ...Array.from({ length: 26 }, (_, i) => ({
-      id: i + 1,
-      name: `חניך א${i + 1}`,
-      group: 'קבוצה א'
-    })),
-    // Group B (27 students)
-    ...Array.from({ length: 27 }, (_, i) => ({
-      id: i + 27,
-      name: `חניך ב${i + 1}`,
-      group: 'קבוצה ב'
-    }))
+  // Real student data from uploaded files - 74 students total
+  const allStudentsData = [
+    // שנה א - 52 תלמידים (IDs: 1-52)
+    { id: 1, name: "נועם אבן חן", year: "א", group: null, room: null },
+    { id: 2, name: "ראם אופנהיימר", year: "א", group: null, room: null },
+    { id: 3, name: "יפתח אטינגר", year: "א", group: null, room: null },
+    { id: 4, name: "עומר אלגביש", year: "א", group: null, room: null },
+    { id: 5, name: "עילי אליהו", year: "א", group: null, room: null },
+    { id: 6, name: "עמית אלסטר", year: "א", group: null, room: null },
+    { id: 7, name: "רגב אלקיים", year: "א", group: null, room: null },
+    { id: 8, name: "שחר ארנרייך", year: "א", group: null, room: null },
+    { id: 9, name: "לביא בן יעקב", year: "א", group: null, room: null },
+    { id: 10, name: "משה בקריצקי", year: "א", group: null, room: null },
+    { id: 11, name: "אסיף גלבוע", year: "א", group: null, room: null },
+    { id: 12, name: "אלון גרוס", year: "א", group: null, room: null },
+    { id: 13, name: "יובל גרייבר", year: "א", group: null, room: null },
+    { id: 14, name: "אוריה דאבוש", year: "א", group: null, room: null },
+    { id: 15, name: "נועם דהן", year: "א", group: null, room: null },
+    { id: 16, name: "אמיר דויטש", year: "א", group: null, room: null },
+    { id: 17, name: "דוד דור", year: "א", group: null, room: null },
+    { id: 18, name: "נתנאל האופט", year: "א", group: null, room: null },
+    { id: 19, name: "שילה הורביץ", year: "א", group: null, room: null },
+    { id: 20, name: "מתן ויטלזון", year: "א", group: null, room: null },
+    { id: 21, name: "איתן ויצטום", year: "א", group: null, room: null },
+    { id: 22, name: "עדי זילברברג בנט", year: "א", group: null, room: null },
+    { id: 23, name: "אוריאל טויזר", year: "א", group: null, room: null },
+    { id: 24, name: "איתי ירוסלביץ'", year: "א", group: null, room: null },
+    { id: 25, name: "איתמר כהן", year: "א", group: null, room: null },
+    { id: 26, name: "יואב כץ", year: "א", group: null, room: null },
+    { id: 27, name: "אבישי לוי", year: "א", group: null, room: null },
+    { id: 28, name: "יוגב לוי", year: "א", group: null, room: null },
+    { id: 29, name: "דביר לוסטיג", year: "א", group: null, room: null },
+    { id: 30, name: "אורי ליכט", year: "א", group: null, room: null },
+    { id: 31, name: "איתן מילר", year: "א", group: null, room: null },
+    { id: 32, name: "ינון מכמן", year: "א", group: null, room: null },
+    { id: 33, name: "עופר מלץ", year: "א", group: null, room: null },
+    { id: 34, name: "נתנאל נשר", year: "א", group: null, room: null },
+    { id: 35, name: "יהודה סינואני", year: "א", group: null, room: null },
+    { id: 36, name: "ארז סלומון", year: "א", group: null, room: null },
+    { id: 37, name: "אורי סעדה", year: "א", group: null, room: null },
+    { id: 38, name: "יאיר עזרן", year: "א", group: null, room: null },
+    { id: 39, name: "אורי עמישב", year: "א", group: null, room: null },
+    { id: 40, name: "נבו ענאקי", year: "א", group: null, room: null },
+    { id: 41, name: "יאיר פישר", year: "א", group: null, room: null },
+    { id: 42, name: "רעי פרידמן", year: "א", group: null, room: null },
+    { id: 43, name: "אלעזר פרינר", year: "א", group: null, room: null },
+    { id: 44, name: "אברהם צ'רקה", year: "א", group: null, room: null },
+    { id: 45, name: "יואב צוברי", year: "א", group: null, room: null },
+    { id: 46, name: "אורי צור", year: "א", group: null, room: null },
+    { id: 47, name: "אברהם משה קמלמן", year: "א", group: null, room: null },
+    { id: 48, name: "בארי רוזנק", year: "א", group: null, room: null },
+    { id: 49, name: "ארז רונן", year: "א", group: null, room: null },
+    { id: 50, name: "יואב שגיב", year: "א", group: null, room: null },
+    { id: 51, name: "חיים שמאי", year: "א", group: null, room: null },
+    { id: 52, name: "רותם שריאל", year: "א", group: null, room: null },
+    
+    // שנה ב - 22 תלמידים (IDs: 53-74)
+    { id: 53, name: "אביתר רשף", year: "ב", group: null, room: null },
+    { id: 54, name: "ארד אלמקייס", year: "ב", group: null, room: null },
+    { id: 55, name: "אריאל יהודה סויסה", year: "ב", group: null, room: null },
+    { id: 56, name: "בועז גרינפלד", year: "ב", group: null, room: null },
+    { id: 57, name: "גבריאל ינגרווד", year: "ב", group: null, room: null },
+    { id: 58, name: "דביר לנדסמן", year: "ב", group: null, room: null },
+    { id: 59, name: "דוד ניקריטין", year: "ב", group: null, room: null },
+    { id: 60, name: "דרור ביטון", year: "ב", group: null, room: null },
+    { id: 61, name: "זיו רוט", year: "ב", group: null, room: null },
+    { id: 62, name: "חגי גוזלן", year: "ב", group: null, room: null },
+    { id: 63, name: "חובב גרינוולד", year: "ב", group: null, room: null },
+    { id: 64, name: "חרות פלד", year: "ב", group: null, room: null },
+    { id: 65, name: "יהונתן קליין", year: "ב", group: null, room: null },
+    { id: 66, name: "יובל לובוצקי", year: "ב", group: null, room: null },
+    { id: 67, name: "מאור סטנלי", year: "ב", group: null, room: null },
+    { id: 68, name: "מעין טרייסטר", year: "ב", group: null, room: null },
+    { id: 69, name: "נועם גז", year: "ב", group: null, room: null },
+    { id: 70, name: "נועם מוגיל", year: "ב", group: null, room: null },
+    { id: 71, name: "שגיא משה ליבובסקי", year: "ב", group: null, room: null },
+    { id: 72, name: "שטרק עמית", year: "ב", group: null, room: null },
+    { id: 73, name: "שמואל דהן", year: "ב", group: null, room: null },
+    { id: 74, name: "שניר ינובר", year: "ב", group: null, room: null }
   ];
 
   // Helper function to get the most recent past time slot
@@ -84,8 +356,9 @@ const AttendanceApp = () => {
     return selectedSlot;
   };
 
-  // State management
-  const [students, setStudents] = useState(initialStudents);
+  // State management with new data structure
+  const [students, setStudents] = useState(allStudentsData);
+  const [currentYear, setCurrentYear] = useState("א"); // Track which year is active
   const [schedule, setSchedule] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [absences, setAbsences] = useState([]);
@@ -97,93 +370,65 @@ const AttendanceApp = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [autoTimeSlot, setAutoTimeSlot] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const [loadingStatus, setLoadingStatus] = useState('');
+
+  // Get students for current year
+  const getCurrentYearStudents = () => students.filter(s => s.year === currentYear);
+  
+  // Get group options based on current year
+  const getGroupOptions = () => {
+    if (currentYear === "א") {
+      return [
+        { value: 'כולם', label: 'כל שנה א' },
+        { value: 'א"ב', label: 'קבוצת א"ב' },
+        { value: 'ש"פ', label: 'קבוצת ש"פ' }
+      ];
+    } else {
+      return [
+        { value: 'כולם', label: 'כל שנה ב' }
+      ];
+    }
+  };
 
   // Staff and approval options
   const approvalOptions = ['הרב איתמר', 'הרב אילעאי', 'בועז', 'הרב שובי', 'עמית', 'הרב יונדב', 'אסף', 'יהודה'];
 
-  // Parse attendance data from sheets
-  const parseAttendanceData = (sheetData) => {
-    return sheetData.map((row, index) => {
-      if (row.length >= 6) {
-        const [date, timeSlot, studentId, present, recorder, timestamp] = row;
-        return {
-          id: `attendance-${index}`,
-          date: date,
-          timeSlot: timeSlot,
-          studentId: parseInt(studentId),
-          present: present === 'נוכח',
-          recorder: recorder,
-          timestamp: timestamp,
-          scheduleId: `${date}-${timeSlot}-כולם` // Default assumption
-        };
-      }
-      return null;
-    }).filter(item => item !== null);
-  };
-
-  // Parse absence data from sheets
-  const parseAbsenceData = (sheetData) => {
-    return sheetData.map((row, index) => {
-      if (row.length >= 7) {
-        const [studentId, departureDate, departureTime, returnDate, returnTime, purpose, approvedBy] = row;
-        return {
-          id: `absence-${index}`,
-          studentId: parseInt(studentId),
-          departureDate: departureDate,
-          departureTime: departureTime,
-          returnDate: returnDate,
-          returnTime: returnTime,
-          purpose: purpose,
-          approvedBy: approvedBy,
-          createdAt: new Date().toISOString()
-        };
-      }
-      return null;
-    }).filter(item => item !== null);
-  };
-
-  // Load all data from Google Sheets
-  const loadAllData = async () => {
-    setIsLoading(true);
-    setLoadingStatus('טוען נתונים מהגיליון...');
-    
-    try {
-      // Load attendance data
-      setLoadingStatus('טוען נתוני נוכחות...');
-      const attendanceData = await loadFromSheet('נוכחות');
-      const parsedAttendance = parseAttendanceData(attendanceData);
-      setAttendance(parsedAttendance);
-      
-      // Load absence data
-      setLoadingStatus('טוען נתוני היעדרויות...');
-      const absenceData = await loadFromSheet('היעדרויות');
-      const parsedAbsences = parseAbsenceData(absenceData);
-      setAbsences(parsedAbsences);
-      
-      setIsDataLoaded(true);
-      setLoadingStatus('');
-      console.log('Data loaded successfully!');
-      console.log('Attendance records:', parsedAttendance.length);
-      console.log('Absence records:', parsedAbsences.length);
-      
-    } catch (error) {
-      console.error('Error loading data:', error);
-      setLoadingStatus('שגיאה בטעינת נתונים - נעבוד עם נתונים מקומיים');
-      setTimeout(() => setLoadingStatus(''), 3000);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Load data on component mount
+  // Initialize students data in Google Sheets on first load
   useEffect(() => {
-    loadAllData();
-  }, []);
+    const initializeStudentsSheet = async () => {
+      try {
+        // Send header row first
+        const headerData = [[
+          'ID',
+          'שם',
+          'שנה',
+          'קבוצה',
+          'חדר',
+          'תאריך עדכון'
+        ]];
+        
+        // Send all students data
+        const studentsData = allStudentsData.map(student => [
+          student.id,
+          student.name,
+          student.year,
+          student.group || '',
+          student.room || '',
+          new Date().toLocaleString('he-IL')
+        ]);
 
-  // Auto-update time slot every minute
-  useEffect(() => {
+        // Combine header and data
+        const fullData = [...headerData, ...studentsData];
+        
+        await sendToSheet('חניכים', fullData);
+        console.log('Students data initialized in Google Sheets');
+      } catch (error) {
+        console.error('Error initializing students sheet:', error);
+      }
+    };
+
+    // Only initialize once when component mounts
+    initializeStudentsSheet();
+  }, []); // Empty dependency array means this runs once on mount
     if (autoTimeSlot) {
       const interval = setInterval(() => {
         setSelectedTimeSlot(getCurrentTimeSlot());
@@ -193,7 +438,7 @@ const AttendanceApp = () => {
     }
   }, [autoTimeSlot]);
 
-  // Generate schedule for current week
+  // Generate schedule for current week - updated for new group structure
   useEffect(() => {
     const generateSchedule = () => {
       const scheduleData = [];
@@ -205,14 +450,19 @@ const AttendanceApp = () => {
         const dateStr = date.toISOString().split('T')[0];
         
         timeSlots.forEach(slot => {
-          const groups = day % 3 === 0 ? ['קבוצה א', 'קבוצה ב', 'כולם'] : ['כולם'];
+          // Different group options for different years
+          const groups = day % 3 === 0 ? 
+            ['כולם', 'א"ב', 'ש"פ'] : // שנה א groups
+            ['כולם']; // שנה ב or mixed
+          
           groups.forEach(group => {
             scheduleData.push({
               id: `${dateStr}-${slot}-${group}`,
               date: dateStr,
               timeSlot: slot,
               group: group,
-              description: `${slot} - שיעור ${group}`
+              description: `${slot} - שיעור ${group}`,
+              year: group === 'כולם' ? 'משותף' : 'א' // Identify if lesson is for specific year
             });
           });
         });
@@ -224,7 +474,35 @@ const AttendanceApp = () => {
     generateSchedule();
   }, []);
 
-  // Check if student is currently absent from academy
+  // Handle students management - updated for year structure
+  const handleStudentUpdate = async (updatedStudents) => {
+    setStudents(updatedStudents);
+    
+    setIsLoading(true);
+    try {
+      const sheetData = updatedStudents.map(student => [
+        student.id,
+        student.name,
+        student.year,
+        student.group || '',
+        student.room || ''
+      ]);
+
+      const success = await sendToSheet('חניכים', sheetData);
+      if (success) {
+        alert('רשימת החניכים עודכנה בהצלחה!');
+      } else {
+        alert('הנתונים נשמרו מקומית, אך לא הצליח לחבר לגיליון. נסה שוב.');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('הנתונים נשמרו מקומית, אך לא הצליח לחבר לגיליון.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Check if student is currently absent from academy - updated for new structure
   const isStudentAbsent = (studentId, date, timeSlot) => {
     const currentDateTime = new Date(`${date} ${timeSlot}`);
     
@@ -232,24 +510,28 @@ const AttendanceApp = () => {
       const departureDateTime = new Date(`${absence.departureDate} ${absence.departureTime}`);
       const returnDateTime = new Date(`${absence.returnDate} ${absence.returnTime}`);
       
-      return absence.studentId === studentId && 
+      return parseInt(absence.studentId) === studentId && 
              currentDateTime >= departureDateTime && 
              currentDateTime <= returnDateTime;
     });
   };
 
-  // Calculate attendance statistics
+  // Calculate attendance statistics - updated for new structure
   const calculateAttendanceStats = (studentId) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return { percentage: 0, presentCount: 0, expectedLessons: 0, totalLessons: 0, status: 'good' };
+    
     const studentAttendance = attendance.filter(a => a.studentId === studentId);
     
-    // Get only lessons that actually happened (have attendance records)
+    // Get only lessons that actually happened (have attendance records) and are relevant to this student
     const actualLessons = attendance
       .map(a => a.scheduleId)
       .filter((scheduleId, index, arr) => arr.indexOf(scheduleId) === index) // Remove duplicates
       .map(scheduleId => schedule.find(s => s.id === scheduleId))
       .filter(lesson => lesson && (
-        lesson.group === 'כולם' || 
-        lesson.group === students.find(st => st.id === studentId)?.group
+        lesson.group === 'כולם' || // All students lessons
+        (lesson.group === student.group) || // Student's specific group
+        (lesson.year === 'משותף') // Mixed year lessons
       ));
     
     // Filter out lessons where student was legitimately absent
@@ -269,15 +551,29 @@ const AttendanceApp = () => {
     };
   };
 
-  // Handle attendance submission
+  // Handle attendance submission - updated for new group structure
   const handleAttendanceSubmission = async (presentStudents) => {
-    const scheduleSlot = schedule.find(s => 
+    const currentYearStudents = getCurrentYearStudents();
+    
+    // Find or create schedule slot for the current year context
+    let scheduleSlot = schedule.find(s => 
       s.date === selectedDate && 
       s.timeSlot === selectedTimeSlot && 
       s.group === selectedGroup
     );
     
-    if (!scheduleSlot) return;
+    // If no existing schedule slot, create one
+    if (!scheduleSlot) {
+      scheduleSlot = {
+        id: `${selectedDate}-${selectedTimeSlot}-${selectedGroup}`,
+        date: selectedDate,
+        timeSlot: selectedTimeSlot,
+        group: selectedGroup,
+        description: `${selectedTimeSlot} - שיעור ${selectedGroup}`,
+        year: currentYear
+      };
+      setSchedule(prev => [...prev, scheduleSlot]);
+    }
 
     // Check if attendance already recorded for this exact combination
     const isDuplicate = attendance.some(a => 
@@ -291,9 +587,10 @@ const AttendanceApp = () => {
       return;
     }
 
+    // Get relevant students based on selection
     const relevantStudents = selectedGroup === 'כולם' ? 
-      students : 
-      students.filter(s => s.group === selectedGroup);
+      currentYearStudents : 
+      currentYearStudents.filter(s => s.group === selectedGroup);
 
     const studentsToRecord = relevantStudents.filter(student => 
       !isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
@@ -307,7 +604,9 @@ const AttendanceApp = () => {
       recorder: recorder,
       timestamp: new Date().toISOString(),
       date: selectedDate,
-      timeSlot: selectedTimeSlot
+      timeSlot: selectedTimeSlot,
+      year: currentYear,
+      group: selectedGroup
     }));
 
     setAttendance(prev => [
@@ -317,10 +616,14 @@ const AttendanceApp = () => {
 
     setIsLoading(true);
     try {
+      // Enhanced sheet data with new structure
       const sheetData = newAttendanceRecords.map(record => [
         record.date,
         record.timeSlot,
         record.studentId,
+        students.find(s => s.id === record.studentId)?.name || '',
+        record.year,
+        record.group,
         record.present ? 'נוכח' : 'לא נוכח',
         record.recorder,
         new Date(record.timestamp).toLocaleString('he-IL')
@@ -340,11 +643,16 @@ const AttendanceApp = () => {
     }
   };
 
-  // Handle absence submission
+  // Handle absence submission - updated with enhanced data
   const handleAbsenceSubmission = async (formData) => {
+    const student = students.find(s => s.id === parseInt(formData.studentId));
+    
     const newAbsence = {
       id: `absence-${Date.now()}`,
       ...formData,
+      studentName: student?.name || '',
+      studentYear: student?.year || '',
+      studentGroup: student?.group || '',
       createdAt: new Date().toISOString()
     };
 
@@ -352,14 +660,19 @@ const AttendanceApp = () => {
 
     setIsLoading(true);
     try {
+      // Enhanced sheet data with student info
       const sheetData = [[
         formData.studentId,
+        newAbsence.studentName,
+        newAbsence.studentYear,
+        newAbsence.studentGroup,
         formData.departureDate,
         formData.departureTime,
         formData.returnDate,
         formData.returnTime,
         formData.purpose,
-        formData.approvedBy
+        formData.approvedBy,
+        new Date(newAbsence.createdAt).toLocaleString('he-IL')
       ]];
 
       const success = await sendToSheet('היעדרויות', sheetData);
@@ -403,59 +716,352 @@ const AttendanceApp = () => {
     </svg>
   );
 
-  // Loading component
-  const LoadingIndicator = () => (
-    <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 flex items-center space-x-3 space-x-reverse">
-        <RefreshCw className="h-6 w-6 text-amber-600 animate-spin" />
-        <span className="text-gray-700">{loadingStatus || 'טוען...'}</span>
-      </div>
-    </div>
-  );
+  // Students Management Component
+  const StudentsManagement = () => {
+    const [editingStudent, setEditingStudent] = useState(null);
+    const [editForm, setEditForm] = useState({ name: '', group: '' });
+    const [newStudent, setNewStudent] = useState({ name: '', group: 'קבוצה א' });
+    const [showAddForm, setShowAddForm] = useState(false);
 
-  // Dashboard Component
+    const handleEditStart = (student) => {
+      setEditingStudent(student.id);
+      setEditForm({ name: student.name, group: student.group });
+    };
+
+    const handleEditSave = () => {
+      if (!editForm.name.trim()) {
+        alert('נא להזין שם חניך');
+        return;
+      }
+
+      const updatedStudents = students.map(student =>
+        student.id === editingStudent
+          ? { ...student, name: editForm.name.trim(), group: editForm.group }
+          : student
+      );
+
+      handleStudentUpdate(updatedStudents);
+      setEditingStudent(null);
+      setEditForm({ name: '', group: '' });
+    };
+
+    const handleEditCancel = () => {
+      setEditingStudent(null);
+      setEditForm({ name: '', group: '' });
+    };
+
+    const handleDelete = (studentId) => {
+      if (window.confirm('האם אתה בטוח שברצונך למחוק את החניך?')) {
+        const updatedStudents = students.filter(s => s.id !== studentId);
+        // Re-assign IDs to maintain sequence
+        const reindexedStudents = updatedStudents.map((student, index) => ({
+          ...student,
+          id: index + 1
+        }));
+        handleStudentUpdate(reindexedStudents);
+      }
+    };
+
+    const handleAddStudent = () => {
+      if (!newStudent.name.trim()) {
+        alert('נא להזין שם חניך');
+        return;
+      }
+
+      const newId = Math.max(...students.map(s => s.id), 0) + 1;
+      const updatedStudents = [...students, {
+        id: newId,
+        name: newStudent.name.trim(),
+        group: newStudent.group
+      }];
+
+      handleStudentUpdate(updatedStudents);
+      setNewStudent({ name: '', group: 'קבוצה א' });
+      setShowAddForm(false);
+    };
+
+    const handleMoveToGroup = (studentId, newGroup) => {
+      const updatedStudents = students.map(student =>
+        student.id === studentId
+          ? { ...student, group: newGroup }
+          : student
+      );
+      handleStudentUpdate(updatedStudents);
+    };
+
+    const resetToRealData = () => {
+      if (window.confirm('האם אתה בטוח שברצונך לאפס את הרשימה לנתונים המקוריים? כל השינויים יאבדו.')) {
+        handleStudentUpdate(realStudentsData);
+      }
+    };
+
+    const groupAStudents = students.filter(s => s.group === 'קבוצה א');
+    const groupBStudents = students.filter(s => s.group === 'קבוצה ב');
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-amber-800">ניהול חניכים</h2>
+            <div className="flex space-x-2 space-x-reverse">
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center space-x-1 space-x-reverse"
+              >
+                <Plus className="h-4 w-4" />
+                <span>הוסף חניך</span>
+              </button>
+              <button
+                onClick={resetToRealData}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center space-x-1 space-x-reverse"
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span>אפס לנתונים מקוריים</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+              <div className="text-center">
+                <p className="text-sm font-medium text-amber-700">סך החניכים</p>
+                <p className="text-2xl font-bold text-amber-900">{students.length}</p>
+              </div>
+            </div>
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <div className="text-center">
+                <p className="text-sm font-medium text-green-700">קבוצה א</p>
+                <p className="text-2xl font-bold text-green-900">{groupAStudents.length}</p>
+              </div>
+            </div>
+            <div className="bg-stone-50 p-4 rounded-lg border border-stone-200">
+              <div className="text-center">
+                <p className="text-sm font-medium text-stone-700">קבוצה ב</p>
+                <p className="text-2xl font-bold text-stone-900">{groupBStudents.length}</p>
+              </div>
+            </div>
+          </div>
+
+          {showAddForm && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <h3 className="font-semibold text-green-800 mb-3">הוספת חניך חדש</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input
+                  type="text"
+                  placeholder="שם החניך"
+                  value={newStudent.name}
+                  onChange={(e) => setNewStudent(prev => ({ ...prev, name: e.target.value }))}
+                  className="p-2 border border-green-300 rounded focus:ring-2 focus:ring-green-500"
+                />
+                <select
+                  value={newStudent.group}
+                  onChange={(e) => setNewStudent(prev => ({ ...prev, group: e.target.value }))}
+                  className="p-2 border border-green-300 rounded focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="קבוצה א">קבוצה א</option>
+                  <option value="קבוצה ב">קבוצה ב</option>
+                </select>
+                <div className="flex space-x-2 space-x-reverse">
+                  <button
+                    onClick={handleAddStudent}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                    disabled={isLoading}
+                  >
+                    הוסף
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setNewStudent({ name: '', group: 'קבוצה א' });
+                    }}
+                    className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  >
+                    ביטול
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* קבוצה א */}
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <h3 className="font-semibold text-green-800 mb-3">
+                קבוצה א ({groupAStudents.length} חניכים)
+              </h3>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {groupAStudents.map(student => (
+                  <div key={student.id} className="bg-white border border-green-200 rounded p-3">
+                    {editingStudent === student.id ? (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={editForm.name}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                          className="w-full p-2 border border-green-300 rounded text-sm"
+                        />
+                        <div className="flex space-x-2 space-x-reverse">
+                          <button
+                            onClick={handleEditSave}
+                            className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                            disabled={isLoading}
+                          >
+                            שמור
+                          </button>
+                          <button
+                            onClick={handleEditCancel}
+                            className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
+                          >
+                            ביטול
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="font-medium text-sm">{student.name}</span>
+                          <span className="text-xs text-gray-500 block">ID: {student.id}</span>
+                        </div>
+                        <div className="flex space-x-1 space-x-reverse">
+                          <button
+                            onClick={() => handleEditStart(student)}
+                            className="text-blue-600 hover:text-blue-800 text-xs p-1"
+                            title="ערוך"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => handleMoveToGroup(student.id, 'קבוצה ב')}
+                            className="text-orange-600 hover:text-orange-800 text-xs"
+                            title="העבר לקבוצה ב"
+                          >
+                            →ב
+                          </button>
+                          <button
+                            onClick={() => handleDelete(student.id)}
+                            className="text-red-600 hover:text-red-800 text-xs p-1"
+                            title="מחק"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* קבוצה ב */}
+            <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
+              <h3 className="font-semibold text-stone-800 mb-3">
+                קבוצה ב ({groupBStudents.length} חניכים)
+              </h3>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {groupBStudents.map(student => (
+                  <div key={student.id} className="bg-white border border-stone-200 rounded p-3">
+                    {editingStudent === student.id ? (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={editForm.name}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                          className="w-full p-2 border border-stone-300 rounded text-sm"
+                        />
+                        <div className="flex space-x-2 space-x-reverse">
+                          <button
+                            onClick={handleEditSave}
+                            className="px-3 py-1 bg-stone-600 text-white rounded text-sm hover:bg-stone-700"
+                            disabled={isLoading}
+                          >
+                            שמור
+                          </button>
+                          <button
+                            onClick={handleEditCancel}
+                            className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
+                          >
+                            ביטול
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="font-medium text-sm">{student.name}</span>
+                          <span className="text-xs text-gray-500 block">ID: {student.id}</span>
+                        </div>
+                        <div className="flex space-x-1 space-x-reverse">
+                          <button
+                            onClick={() => handleEditStart(student)}
+                            className="text-blue-600 hover:text-blue-800 text-xs p-1"
+                            title="ערוך"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => handleMoveToGroup(student.id, 'קבוצה א')}
+                            className="text-orange-600 hover:text-orange-800 text-xs"
+                            title="העבר לקבוצה א"
+                          >
+                            ←א
+                          </button>
+                          <button
+                            onClick={() => handleDelete(student.id)}
+                            className="text-red-600 hover:text-red-800 text-xs p-1"
+                            title="מחק"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Dashboard Component - Updated for current year
   const Dashboard = () => {
-    const todayAttendance = attendance.filter(a => a.date === selectedDate);
+    const currentYearStudents = getCurrentYearStudents();
+    const todayAttendance = attendance.filter(a => a.date === selectedDate && 
+      currentYearStudents.some(s => s.id === a.studentId));
     const todaySchedule = schedule.filter(s => s.date === selectedDate);
     const overallAttendanceRate = todayAttendance.length > 0 ? 
       Math.round((todayAttendance.filter(a => a.present).length / todayAttendance.length) * 100) : 0;
 
-    const lowAttendanceStudents = students.filter(student => {
+    const lowAttendanceStudents = currentYearStudents.filter(student => {
       const stats = calculateAttendanceStats(student.id);
       return stats.status === 'critical' || stats.status === 'warning';
     });
 
+    // Group statistics for שנה א
+    const groupAStudents = currentYearStudents.filter(s => s.group === 'א"ב');
+    const groupBStudents = currentYearStudents.filter(s => s.group === 'ש"פ');
+
     return (
       <div className="space-y-6" dir="rtl">
-        {/* Data status indicator */}
-        <div className={`p-3 rounded-lg border ${isDataLoaded ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 space-x-reverse">
-              <div className={`w-3 h-3 rounded-full ${isDataLoaded ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-              <span className={`text-sm font-medium ${isDataLoaded ? 'text-green-800' : 'text-yellow-800'}`}>
-                {isDataLoaded ? 'נתונים נטענו מהגיליון' : 'עובד עם נתונים מקומיים'}
-              </span>
-              <span className={`text-xs ${isDataLoaded ? 'text-green-600' : 'text-yellow-600'}`}>
-                ({attendance.length} רישומי נוכחות, {absences.length} היעדרויות)
-              </span>
-            </div>
-            <button
-              onClick={loadAllData}
-              className="flex items-center space-x-1 space-x-reverse px-3 py-1 bg-amber-600 text-white text-sm rounded hover:bg-amber-700"
-              disabled={isLoading}
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-              <span>רענן נתונים</span>
-            </button>
-          </div>
+        {/* Year Header */}
+        <div className="bg-gradient-to-r from-amber-50 to-green-50 border border-amber-200 rounded-lg p-4">
+          <h2 className="text-2xl font-bold text-amber-800 mb-2">
+            שנה {currentYear} - לוח בקרה
+          </h2>
+          <p className="text-amber-700">
+            {currentYear === "א" ? "מחזור ט - שנה ראשונה" : "מחזור ח - שנה שנייה"} 
+            • {currentYearStudents.length} חניכים
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-amber-700">סך חניכים</p>
-                <p className="text-2xl font-bold text-amber-900">{students.length}</p>
+                <p className="text-sm font-medium text-amber-700">חניכים בשנה</p>
+                <p className="text-2xl font-bold text-amber-900">{currentYearStudents.length}</p>
               </div>
               <Users className="h-8 w-8 text-amber-600" />
             </div>
@@ -492,11 +1098,36 @@ const AttendanceApp = () => {
           </div>
         </div>
 
+        {/* Group breakdown for שנה א */}
+        {currentYear === "א" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div className="text-center">
+                <p className="text-sm font-medium text-blue-700">קבוצת א"ב</p>
+                <p className="text-2xl font-bold text-blue-900">{groupAStudents.length}</p>
+                <p className="text-xs text-blue-600">חניכים</p>
+              </div>
+            </div>
+            <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+              <div className="text-center">
+                <p className="text-sm font-medium text-purple-700">קבוצת ש"פ</p>
+                <p className="text-2xl font-bold text-purple-900">{groupBStudents.length}</p>
+                <p className="text-xs text-purple-600">חניכים</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
           <h3 className="font-semibold text-amber-800 mb-2">🔗 גיליון Google Sheets</h3>
           <p className="text-amber-700 text-sm mb-2">
-            כל הנתונים נשמרים באופן אוטומטי בגיליון Google Sheets
+            כל הנתונים נשמרים באופן אוטומטי בגיליון Google Sheets עם המבנה החדש:
           </p>
+          <div className="text-amber-600 text-xs mb-3">
+            • גיליון "חניכים": ID, שם, שנה, קבוצה, חדר<br/>
+            • גיליון "נוכחות": תאריך, שעה, תלמיד, שנה, קבוצה, נוכחות<br/>
+            • גיליון "היעדרויות": תלמיד, שנה, קבוצה, תאריכים, מטרה
+          </div>
           <a 
             href={SHEET_URL} 
             target="_blank" 
@@ -515,7 +1146,10 @@ const AttendanceApp = () => {
                 const stats = calculateAttendanceStats(student.id);
                 return (
                   <div key={student.id} className="flex justify-between items-center bg-white p-2 rounded">
-                    <span className="font-medium">{student.name} ({student.group})</span>
+                    <span className="font-medium">
+                      {student.name}
+                      {student.group && ` (${student.group})`}
+                    </span>
                     <span className={`px-2 py-1 rounded text-sm ${
                       stats.status === 'critical' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
                     }`}>
@@ -542,8 +1176,9 @@ const AttendanceApp = () => {
                     <span className="font-medium text-sm">{lesson.timeSlot}</span>
                     <span className={`px-2 py-1 rounded text-xs ${
                       lesson.group === 'כולם' ? 'bg-amber-100 text-amber-800' : 
-                      lesson.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 
-                      'bg-stone-100 text-stone-800'
+                      lesson.group === 'א"ב' ? 'bg-blue-100 text-blue-800' : 
+                      lesson.group === 'ש"פ' ? 'bg-purple-100 text-purple-800' :
+                      'bg-gray-100 text-gray-800'
                     }`}>
                       {lesson.group}
                     </span>
@@ -766,7 +1401,7 @@ const AttendanceApp = () => {
     );
   };
 
-  // Absence Reporting Component
+  // Absence Reporting Component - Updated for current year
   const AbsenceReporting = () => {
     const [formData, setFormData] = useState({
       studentId: '',
@@ -777,6 +1412,8 @@ const AttendanceApp = () => {
       purpose: '',
       approvedBy: ''
     });
+
+    const currentYearStudents = getCurrentYearStudents();
 
     const handleInputChange = (field, value) => {
       setFormData(prev => ({
@@ -808,7 +1445,8 @@ const AttendanceApp = () => {
       const now = new Date();
       return absences.filter(absence => {
         const returnDateTime = new Date(`${absence.returnDate} ${absence.returnTime}`);
-        return returnDateTime >= now;
+        const student = students.find(s => s.id === parseInt(absence.studentId));
+        return returnDateTime >= now && student && student.year === currentYear;
       });
     };
 
@@ -816,8 +1454,18 @@ const AttendanceApp = () => {
 
     return (
       <div className="space-y-6" dir="rtl">
+        {/* Year Header */}
+        <div className="bg-gradient-to-r from-amber-50 to-green-50 border border-amber-200 rounded-lg p-4">
+          <h2 className="text-2xl font-bold text-amber-800 mb-2">
+            דיווח היעדרויות - שנה {currentYear}
+          </h2>
+          <p className="text-amber-700">
+            {currentYear === "א" ? "מחזור ט - שנה ראשונה" : "מחזור ח - שנה שנייה"}
+          </p>
+        </div>
+
         <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4 text-amber-800">דיווח היעדרות חדשה</h2>
+          <h3 className="text-lg font-semibold mb-4 text-amber-800">דיווח היעדרות חדשה</h3>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>
@@ -828,9 +1476,9 @@ const AttendanceApp = () => {
                 className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
               >
                 <option value="">בחר חניך</option>
-                {students.map(student => (
+                {currentYearStudents.map(student => (
                   <option key={student.id} value={student.id}>
-                    {student.name} ({student.group})
+                    {student.name}{student.group && ` (${student.group})`}
                   </option>
                 ))}
               </select>
@@ -915,7 +1563,7 @@ const AttendanceApp = () => {
           <h3 className="text-lg font-semibold mb-4 text-amber-800">היעדרויות פעילות</h3>
           
           {currentAbsences.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">אין היעדרויות פעילות כרגע</p>
+            <p className="text-gray-500 text-center py-4">אין היעדרויות פעילות כרגע בשנה זו</p>
           ) : (
             <div className="space-y-3">
               {currentAbsences.map(absence => {
@@ -930,7 +1578,9 @@ const AttendanceApp = () => {
                   }`}>
                     <div className="flex justify-between items-start mb-2">
                       <div>
-                        <h4 className="font-medium">{student?.name} ({student?.group})</h4>
+                        <h4 className="font-medium">
+                          {student?.name}{student?.group && ` (${student.group})`}
+                        </h4>
                         <p className="text-sm text-gray-600">{absence.purpose}</p>
                       </div>
                       <div className="text-left">
@@ -967,13 +1617,30 @@ const AttendanceApp = () => {
     );
   };
 
-  // Students Overview Component
+  // Students Overview Component - Updated for current year
   const StudentsOverview = () => {
+    const currentYearStudents = getCurrentYearStudents();
+    const filteredStudents = currentYearStudents.filter(student =>
+      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (student.group && student.group.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
     return (
       <div className="space-y-6" dir="rtl">
+        {/* Year Header */}
+        <div className="bg-gradient-to-r from-amber-50 to-green-50 border border-amber-200 rounded-lg p-4">
+          <h2 className="text-2xl font-bold text-amber-800 mb-2">
+            סקירת חניכים - שנה {currentYear}
+          </h2>
+          <p className="text-amber-700">
+            {currentYear === "א" ? "מחזור ט - שנה ראשונה" : "מחזור ח - שנה שנייה"} 
+            • {currentYearStudents.length} חניכים
+          </p>
+        </div>
+
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-amber-800">סקירת חניכים</h2>
+            <h3 className="text-lg font-semibold text-amber-800">טבלת חניכים</h3>
             <div className="flex space-x-2 space-x-reverse">
               <div className="relative">
                 <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -993,7 +1660,7 @@ const AttendanceApp = () => {
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="text-right py-3 px-4 font-medium">שם</th>
-                  <th className="text-right py-3 px-4 font-medium">קבוצה</th>
+                  {currentYear === "א" && <th className="text-right py-3 px-4 font-medium">קבוצה</th>}
                   <th className="text-center py-3 px-4 font-medium">אחוז נוכחות</th>
                   <th className="text-center py-3 px-4 font-medium">נוכח/נדרש</th>
                   <th className="text-center py-3 px-4 font-medium">סטטוס</th>
@@ -1005,13 +1672,21 @@ const AttendanceApp = () => {
                   return (
                     <tr key={student.id} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="py-3 px-4 font-medium">{student.name}</td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          student.group === 'קבוצה א' ? 'bg-green-100 text-green-800' : 'bg-stone-100 text-stone-800'
-                        }`}>
-                          {student.group}
-                        </span>
-                      </td>
+                      {currentYear === "א" && (
+                        <td className="py-3 px-4">
+                          {student.group ? (
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              student.group === 'א"ב' ? 'bg-blue-100 text-blue-800' : 
+                              student.group === 'ש"פ' ? 'bg-purple-100 text-purple-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {student.group}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">לא משויך</span>
+                          )}
+                        </td>
+                      )}
                       <td className="py-3 px-4 text-center">
                         <span className={`font-semibold ${
                           stats.status === 'critical' ? 'text-red-600' : 
@@ -1039,80 +1714,21 @@ const AttendanceApp = () => {
               </tbody>
             </table>
           </div>
+
+          {filteredStudents.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              {searchTerm ? 'לא נמצאו חניכים התואמים לחיפוש' : 'אין חניכים בשנה זו'}
+            </div>
+          )}
         </div>
       </div>
     );
   };
-
-  // Navigation
-  const Navigation = () => (
-    <nav className="bg-gradient-to-r from-amber-100 to-green-100 border-b border-amber-200 p-4" dir="rtl">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center space-x-3 space-x-reverse">
-          <Logo />
-          <div>
-            <h1 className="text-xl font-bold text-amber-800">רוח השדה</h1>
-            <p className="text-sm text-amber-700">מכינה קדם צבאית דתית לבנים</p>
-          </div>
-        </div>
-        <div className="flex space-x-4 space-x-reverse">
-          <button
-            onClick={() => setCurrentView('dashboard')}
-            className={`px-4 py-2 rounded ${
-              currentView === 'dashboard' 
-                ? 'bg-amber-600 text-white' 
-                : 'bg-white text-amber-700 hover:bg-amber-50 border border-amber-200'
-            }`}
-          >
-            לוח בקרה
-          </button>
-          <button
-            onClick={() => setCurrentView('attendance')}
-            className={`px-4 py-2 rounded ${
-              currentView === 'attendance' 
-                ? 'bg-amber-600 text-white' 
-                : 'bg-white text-amber-700 hover:bg-amber-50 border border-amber-200'
-            }`}
-          >
-            רישום נוכחות
-          </button>
-          <button
-            onClick={() => setCurrentView('absences')}
-            className={`px-4 py-2 rounded ${
-              currentView === 'absences' 
-                ? 'bg-amber-600 text-white' 
-                : 'bg-white text-amber-700 hover:bg-amber-50 border border-amber-200'
-            }`}
-          >
-            דיווח היעדרות
-          </button>
-          <button
-            onClick={() => setCurrentView('students')}
-            className={`px-4 py-2 rounded ${
-              currentView === 'students' 
-                ? 'bg-amber-600 text-white' 
-                : 'bg-white text-amber-700 hover:bg-amber-50 border border-amber-200'
-            }`}
-          >
-            חניכים
-          </button>
-        </div>
-      </div>
-    </nav>
-  );
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-green-50">
-      {isLoading && <LoadingIndicator />}
-      <Navigation />
-      <div className="container mx-auto px-4 py-6">
-        {currentView === 'dashboard' && <Dashboard />}
-        {currentView === 'attendance' && <TakeAttendance />}
-        {currentView === 'absences' && <AbsenceReporting />}
-        {currentView === 'students' && <StudentsOverview />}
-      </div>
-    </div>
-  );
-};
-
-export default AttendanceApp;
+                  <th className="text-right py-3 px-4 font-medium">קבוצה</th>
+                  <th className="text-center py-3 px-4 font-medium">אחוז נוכחות</th>
+                  <th className="text-center py-3 px-4 font-medium">נוכח/נדרש</th>
+                  <th className="text-center py-3 px-4 font-medium">סטטוס</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStudents.map(student =>
