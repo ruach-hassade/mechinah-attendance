@@ -23,6 +23,330 @@ const AttendanceApp = () => {
     }
   };
 
+  // Students Overview Component - Updated for current year
+  const StudentsOverview = () => {
+    const currentYearStudents = getCurrentYearStudents();
+    const filteredStudents = currentYearStudents.filter(student =>
+      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (student.group && student.group.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        {/* Year Header */}
+        <div className="bg-gradient-to-r from-amber-50 to-green-50 border border-amber-200 rounded-lg p-4">
+          <h2 className="text-2xl font-bold text-amber-800 mb-2">
+            סקירת חניכים - שנה {currentYear}
+          </h2>
+          <p className="text-amber-700">
+            {currentYear === "א" ? "מחזור ט - שנה ראשונה" : "מחזור ח - שנה שנייה"} 
+            • {currentYearStudents.length} חניכים
+          </p>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-amber-800">טבלת חניכים</h3>
+            <div className="flex space-x-2 space-x-reverse">
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="חפש חניכים..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pr-10 pl-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-right py-3 px-4 font-medium">שם</th>
+                  {currentYear === "א" && <th className="text-right py-3 px-4 font-medium">קבוצה</th>}
+                  <th className="text-center py-3 px-4 font-medium">אחוז נוכחות</th>
+                  <th className="text-center py-3 px-4 font-medium">נוכח/נדרש</th>
+                  <th className="text-center py-3 px-4 font-medium">סטטוס</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStudents.map(student => {
+                  const stats = calculateAttendanceStats(student.id);
+                  return (
+                    <tr key={student.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4 font-medium">{student.name}</td>
+                      {currentYear === "א" && (
+                        <td className="py-3 px-4">
+                          {student.group ? (
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              student.group === 'א"ב' ? 'bg-blue-100 text-blue-800' : 
+                              student.group === 'ש"פ' ? 'bg-purple-100 text-purple-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {student.group}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">לא משויך</span>
+                          )}
+                        </td>
+                      )}
+                      <td className="py-3 px-4 text-center">
+                        <span className={`font-semibold ${
+                          stats.status === 'critical' ? 'text-red-600' : 
+                          stats.status === 'warning' ? 'text-yellow-600' : 'text-green-600'
+                        }`}>
+                          {stats.percentage}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center text-sm text-gray-600">
+                        {stats.presentCount} / {stats.expectedLessons}
+                        {stats.totalLessons !== stats.expectedLessons && (
+                          <div className="text-xs text-orange-600">
+                            ({stats.totalLessons - stats.expectedLessons} בהיעדרות)
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {stats.status === 'critical' && <span className="text-red-600">🚨</span>}
+                        {stats.status === 'warning' && <span className="text-yellow-600">⚠️</span>}
+                        {stats.status === 'good' && <span className="text-green-600">✅</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {filteredStudents.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              {searchTerm ? 'לא נמצאו חניכים התואמים לחיפוש' : 'אין חניכים בשנה זו'}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Absence Reporting Component - Updated for current year
+  const AbsenceReporting = () => {
+    const [formData, setFormData] = useState({
+      studentId: '',
+      departureDate: new Date().toISOString().split('T')[0],
+      departureTime: '08:00',
+      returnDate: new Date().toISOString().split('T')[0],
+      returnTime: '17:00',
+      purpose: '',
+      approvedBy: ''
+    });
+
+    const currentYearStudents = getCurrentYearStudents();
+
+    const handleInputChange = (field, value) => {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    };
+
+    const handleSubmit = async () => {
+      if (!formData.studentId || !formData.purpose || !formData.approvedBy) {
+        alert('אנא מלא את כל השדות הנדרשים');
+        return;
+      }
+
+      await handleAbsenceSubmission(formData);
+      
+      setFormData({
+        studentId: '',
+        departureDate: new Date().toISOString().split('T')[0],
+        departureTime: '08:00',
+        returnDate: new Date().toISOString().split('T')[0],
+        returnTime: '17:00',
+        purpose: '',
+        approvedBy: ''
+      });
+    };
+
+    const getCurrentAbsences = () => {
+      const now = new Date();
+      return absences.filter(absence => {
+        const returnDateTime = new Date(`${absence.returnDate} ${absence.returnTime}`);
+        const student = students.find(s => s.id === parseInt(absence.studentId));
+        return returnDateTime >= now && student && student.year === currentYear;
+      });
+    };
+
+    const currentAbsences = getCurrentAbsences();
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        {/* Year Header */}
+        <div className="bg-gradient-to-r from-amber-50 to-green-50 border border-amber-200 rounded-lg p-4">
+          <h2 className="text-2xl font-bold text-amber-800 mb-2">
+            דיווח היעדרויות - שנה {currentYear}
+          </h2>
+          <p className="text-amber-700">
+            {currentYear === "א" ? "מחזור ט - שנה ראשונה" : "מחזור ח - שנה שנייה"}
+          </p>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold mb-4 text-amber-800">דיווח היעדרות חדשה</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">חניך</label>
+              <select
+                value={formData.studentId}
+                onChange={(e) => handleInputChange('studentId', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="">בחר חניך</option>
+                {currentYearStudents.map(student => (
+                  <option key={student.id} value={student.id}>
+                    {student.name}{student.group && ` (${student.group})`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">מאושר על ידי</label>
+              <select
+                value={formData.approvedBy}
+                onChange={(e) => handleInputChange('approvedBy', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="">בחר מאשר</option>
+                {approvalOptions.map(approver => (
+                  <option key={approver} value={approver}>{approver}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">תאריך יציאה</label>
+              <input
+                type="date"
+                value={formData.departureDate}
+                onChange={(e) => handleInputChange('departureDate', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">שעת יציאה</label>
+              <input
+                type="time"
+                value={formData.departureTime}
+                onChange={(e) => handleInputChange('departureTime', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">תאריך חזרה צפויה</label>
+              <input
+                type="date"
+                value={formData.returnDate}
+                onChange={(e) => handleInputChange('returnDate', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">שעת חזרה צפויה</label>
+              <input
+                type="time"
+                value={formData.returnTime}
+                onChange={(e) => handleInputChange('returnTime', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">מטרת היציאה</label>
+            <input
+              type="text"
+              value={formData.purpose}
+              onChange={(e) => handleInputChange('purpose', e.target.value)}
+              placeholder="למשל: ביקור רופא, אירוע משפחתי, צרכים אישיים..."
+              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+
+          <button
+            onClick={handleSubmit}
+            className="w-full px-6 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:bg-amber-300"
+            disabled={isLoading}
+          >
+            {isLoading ? 'שולח...' : 'דווח היעדרות'}
+          </button>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold mb-4 text-amber-800">היעדרויות פעילות</h3>
+          
+          {currentAbsences.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">אין היעדרויות פעילות כרגע בשנה זו</p>
+          ) : (
+            <div className="space-y-3">
+              {currentAbsences.map(absence => {
+                const student = students.find(s => s.id === parseInt(absence.studentId));
+                const departureDateTime = new Date(`${absence.departureDate} ${absence.departureTime}`);
+                const returnDateTime = new Date(`${absence.returnDate} ${absence.returnTime}`);
+                const isCurrentlyOut = new Date() >= departureDateTime;
+                
+                return (
+                  <div key={absence.id} className={`border rounded-lg p-4 ${
+                    isCurrentlyOut ? 'border-red-200 bg-red-50' : 'border-yellow-200 bg-yellow-50'
+                  }`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-medium">
+                          {student?.name}{student?.group && ` (${student.group})`}
+                        </h4>
+                        <p className="text-sm text-gray-600">{absence.purpose}</p>
+                      </div>
+                      <div className="text-left">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          isCurrentlyOut ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {isCurrentlyOut ? 'יצא מהמכינה' : 'היעדרות מתוכננת'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium">יציאה: </span>
+                        {absence.departureDate} בשעה {absence.departureTime}
+                      </div>
+                      <div>
+                        <span className="font-medium">חזרה צפויה: </span>
+                        {absence.returnDate} בשעה {absence.returnTime}
+                      </div>
+                    </div>
+                    
+                    <div className="mt-2 text-sm">
+                      <span className="font-medium">מאושר על ידי: </span>
+                      <span className="text-amber-600">{absence.approvedBy}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Take Attendance Component - Updated for current year and groups
   const TakeAttendance = () => {
     const [presentStudents, setPresentStudents] = useState([]);
@@ -1073,6 +1397,8 @@ const AttendanceApp = () => {
         {/* Main Content */}
         {currentView === 'dashboard' && <Dashboard />}
         {currentView === 'attendance' && <TakeAttendance />}
+        {currentView === 'absences' && <AbsenceReporting />}
+        {currentView === 'students' && <StudentsOverview />}
 
         {/* Footer Info */}
         <div className="mt-8 text-center text-gray-500 text-xs">
