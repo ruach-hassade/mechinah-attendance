@@ -23,6 +23,234 @@ const AttendanceApp = () => {
     }
   };
 
+  // Take Attendance Component - Updated for current year and groups
+  const TakeAttendance = () => {
+    const [presentStudents, setPresentStudents] = useState([]);
+    const currentYearStudents = getCurrentYearStudents();
+
+    const handleStudentToggle = (studentId) => {
+      setPresentStudents(prev => 
+        prev.includes(studentId) 
+          ? prev.filter(id => id !== studentId)
+          : [...prev, studentId]
+      );
+    };
+
+    const handleSubmit = async () => {
+      if (!recorder.trim()) {
+        alert('אנא בחר רושם');
+        return;
+      }
+      
+      await handleAttendanceSubmission(presentStudents);
+      setPresentStudents([]);
+      setRecorder('');
+    };
+
+    // Filter students based on selected group
+    const getRelevantStudents = () => {
+      if (selectedGroup === 'כולם') {
+        return currentYearStudents;
+      } else {
+        return currentYearStudents.filter(s => s.group === selectedGroup);
+      }
+    };
+
+    const relevantStudents = getRelevantStudents();
+    
+    const studentsInAcademy = relevantStudents.filter(student => 
+      !isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
+    );
+
+    const studentsCurrentlyOut = relevantStudents.filter(student => 
+      isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
+    );
+
+    const getCurrentTimeInfo = () => {
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('he-IL', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      return timeString;
+    };
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        {/* Year Header */}
+        <div className="bg-gradient-to-r from-amber-50 to-green-50 border border-amber-200 rounded-lg p-4">
+          <h2 className="text-2xl font-bold text-amber-800 mb-2">
+            רישום נוכחות - שנה {currentYear}
+          </h2>
+          <p className="text-amber-700">
+            {currentYear === "א" ? "מחזור ט - שנה ראשונה" : "מחזור ח - שנה שנייה"}
+          </p>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          {autoTimeSlot && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <Clock className="h-5 w-5 text-amber-600" />
+                  <span className="text-amber-800 font-medium">
+                    שעה נבחרה אוטומטית: {selectedTimeSlot}
+                  </span>
+                  <span className="text-amber-600 text-sm">
+                    (השעה הנוכחית: {getCurrentTimeInfo()})
+                  </span>
+                </div>
+                <button
+                  onClick={() => setAutoTimeSlot(false)}
+                  className="text-amber-600 hover:text-amber-800 text-sm underline"
+                >
+                  בחירה ידנית
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">תאריך</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">שעה</label>
+              <select
+                value={selectedTimeSlot}
+                onChange={(e) => {
+                  setSelectedTimeSlot(e.target.value);
+                  setAutoTimeSlot(false);
+                }}
+                disabled={autoTimeSlot}
+                className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500 ${
+                  autoTimeSlot ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
+              >
+                {timeSlots.map(slot => (
+                  <option key={slot} value={slot}>{slot}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">קבוצה</label>
+              <select
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              >
+                {getGroupOptions().map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              {currentYear === "א" && (
+                <p className="text-xs text-gray-500 mt-1">
+                  הקבוצות א"ב ו-ש"פ יהיו זמינות לאחר חלוקת התלמידים
+                </p>
+              )}
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">רושם</label>
+              <select
+                value={recorder}
+                onChange={(e) => setRecorder(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="">בחר רושם</option>
+                {approvalOptions.map(person => (
+                  <option key={person} value={person}>{person}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-medium">חניכים נוכחים במכינה ({studentsInAcademy.length})</h3>
+              <div className="text-sm text-gray-600">
+                נבחרו: {presentStudents.length} / {studentsInAcademy.length}
+              </div>
+            </div>
+
+            {studentsCurrentlyOut.length > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded p-3 mb-3">
+                <h4 className="font-medium text-orange-800 mb-2">חניכים שיצאו מהמכינה ({studentsCurrentlyOut.length}):</h4>
+                <div className="text-sm text-orange-700">
+                  {studentsCurrentlyOut.map(student => student.name).join(', ')}
+                </div>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-96 overflow-y-auto border border-gray-200 rounded p-4">
+              {studentsInAcademy.length === 0 ? (
+                <div className="col-span-full text-center text-gray-500 py-4">
+                  {studentsCurrentlyOut.length > 0 ? 
+                    "כל החניכים בקבוצה זו נמצאים בהיעדרות" : 
+                    "אין חניכים בקבוצה זו"}
+                </div>
+              ) : (
+                studentsInAcademy.map(student => (
+                  <label key={student.id} className="flex items-center space-x-2 space-x-reverse p-2 hover:bg-gray-50 rounded cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={presentStudents.includes(student.id)}
+                      onChange={() => handleStudentToggle(student.id)}
+                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                    />
+                    <span className="text-sm">{student.name}</span>
+                    {student.group && (
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        student.group === 'א"ב' ? 'bg-blue-100 text-blue-800' : 
+                        student.group === 'ש"פ' ? 'bg-purple-100 text-purple-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {student.group}
+                      </span>
+                    )}
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-between">
+            <button
+              onClick={() => setPresentStudents(studentsInAcademy.map(s => s.id))}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300"
+              disabled={studentsInAcademy.length === 0 || isLoading}
+            >
+              בחר הכל
+            </button>
+            <button
+              onClick={() => setPresentStudents([])}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300"
+              disabled={isLoading}
+            >
+              נקה הכל
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="px-6 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:bg-amber-300"
+              disabled={studentsInAcademy.length === 0 || isLoading}
+            >
+              {isLoading ? 'שולח...' : 'שלח נוכחות'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Time slots
   const timeSlots = ['07:30', '09:00', '12:15', '15:30', '16:45', '17:45', '20:00'];
   
@@ -844,6 +1072,7 @@ const AttendanceApp = () => {
 
         {/* Main Content */}
         {currentView === 'dashboard' && <Dashboard />}
+        {currentView === 'attendance' && <TakeAttendance />}
 
         {/* Footer Info */}
         <div className="mt-8 text-center text-gray-500 text-xs">
