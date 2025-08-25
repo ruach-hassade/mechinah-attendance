@@ -1,4 +1,1073 @@
-import React, { useState, useEffect } from 'react';
+// Data handlers
+  const handleStudentUpdate = async (updatedStudents) => {
+    setStudents(updatedStudents);
+    
+    setIsLoading(true);
+    try {
+      const headers = ['ID', 'שם', 'שנה', 'קבוצה', 'חדר', 'תאריך עדכון'];
+      const formattedData = [
+        headers,
+        ...updatedStudents.map(student => [
+          student.id,
+          student.name,
+          student.year,
+          student.group || '',
+          student.room || '',
+          new Date().toLocaleString('he-IL')
+        ])
+      ];
+      
+      await sendToSheet(SHEETS.STUDENTS, [headers], 'clear');
+      const success = await sendToSheet(SHEETS.STUDENTS, formattedData);
+      
+      if (success) {
+        setLastSync(new Date());
+        alert('רשימת החניכים עודכנה בהצלחה וחוברה לגיליון!');
+      } else {
+        alert('הנתונים נשמרו מקומית, אך לא הצליח לחבר לגיליון. נסה שוב.');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('הנתונים נשמרו מקומית, אך לא הצליח לחבר לגיליון.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAttendanceSubmission = async (presentStudents) => {
+    const currentYearStudents = getCurrentYearStudents();
+    
+    let scheduleSlot = schedule.find(s => 
+      s.date === selectedDate && 
+      s.timeSlot === selectedTimeSlot && 
+      s.group === selectedGroup
+    );
+    
+    if (!scheduleSlot) {
+      scheduleSlot = {
+        id: `${selectedDate}-${selectedTimeSlot}-${selectedGroup}`,
+        date: selectedDate,
+        timeSlot: selectedTimeSlot,
+        group: selectedGroup,
+        description: `${selectedTimeSlot} - שיעור ${selectedGroup}`,
+        year: currentYear
+      };
+      setSchedule(prev => [...prev, scheduleSlot]);
+    }
+
+    const isDuplicate = attendance.some(a => 
+      a.date === selectedDate && 
+      a.timeSlot === selectedTimeSlot && 
+      a.scheduleId === scheduleSlot.id
+    );
+
+    if (isDuplicate) {
+      alert('נוכחות כבר נרשמה עבור שעה זו!');
+      return;
+    }
+
+    const relevantStudents = selectedGroup === 'כולם' ? 
+      currentYearStudents : 
+      currentYearStudents.filter(s => s.group === selectedGroup);
+
+    const studentsToRecord = relevantStudents.filter(student => 
+      !isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
+    );
+
+    const newAttendanceRecords = studentsToRecord.map(student => ({
+      id: `${scheduleSlot.id}-${student.id}`,
+      studentId: student.id,
+      scheduleId: scheduleSlot.id,
+      present: presentStudents.includes(student.id),
+      recorder: recorder,
+      timestamp: new Date().toISOString(),
+      date: selectedDate,
+      timeSlot: selectedTimeSlot,
+      year: currentYear,
+      group: selectedGroup
+    }));
+
+    setAttendance(prev => [
+      ...prev.filter(a => !newAttendanceRecords.some(n => n.scheduleId === a.scheduleId)),
+      ...newAttendanceRecords
+    ]);
+
+    setIsLoading(true);
+    try {
+      const sheetData = newAttendanceRecords.map(record => [
+        record.date,
+        record.timeSlot,
+        record.studentId,
+        students.find(s => s.id === record.studentId)?.name || '',
+        record.year,
+        record.group,
+        record.present ? 'נוכח' : 'לא נוכח',
+        record.recorder,
+        new Date(record.timestamp).toLocaleString('he-IL')
+      ]);
+
+      const success = await sendToSheet(SHEETS.ATTENDANCE, sheetData);
+      if (success) {
+        setLastSync(new Date());
+        alert('הנוכחות נרשמה בהצלחה וחוברה לגיליון!');
+      } else {
+        alert('הנוכחות נרשמה מקומית, אך לא הצליח לחבר לגיליון. נסה שוב.');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('הנוכחות נרשמה מקומית, אך לא הצליח לחבר לגיליון.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAbsenceSubmission = async (formData) => {
+    const student = students.find(s => s.id === parseInt(formData.studentId));
+    
+    const newAbsence = {
+      id: `absence-${Date.now()}`,
+      ...formData,
+      studentName: student?.name || '',
+      studentYear: student?.year || '',
+      studentGroup: student?.group || '',
+      createdAt: new Date().toISOString()
+    };
+
+    setAbsences(prev => [...prev, newAbsence]);
+
+    setIsLoading(true);
+    try {
+      const sheetData = [[
+        formData.studentId,
+        newAbsence.studentName,
+        newAbsence.studentYear,
+        newAbsence.studentGroup,
+        formData.departureDate,
+        formData.departureTime,
+        formData.returnDate,
+        formData.returnTime,
+        formData.purpose,
+        formData.approvedBy,
+        new Date(newAbsence.createdAt).toLocaleString('he-IL')
+      ]];
+
+      const success = await sendToSheet(SHEETS.ABSENCES, sheetData);
+      if (success) {
+        setLastSync(new Date());
+        alert('דיווח היעדרות נרשם בהצלחה וחובר לגיליון!');
+      } else {
+        alert('דיווח היעדרות נרשם מקומית, אך לא הצליח לחבר לגיליון. נסה שוב.');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('דיווח היעדרות נרשם מקומית, אך לא הצליח לחבר לגיליון.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Take Attendance Component
+  const TakeAttendance = () => {
+    const [presentStudents, setPresentStudents] = useState([]);
+    const currentYearStudents = getCurrentYearStudents();
+
+    const handleStudentToggle = (studentId) => {
+      setPresentStudents(prev => 
+        prev.includes(studentId) 
+          ? prev.filter(id => id !== studentId)
+          : [...prev, studentId]
+      );
+    };
+
+    const handleSubmit = async () => {
+      if (!recorder.trim()) {
+        alert('אנא בחר רושם');
+        return;
+      }
+      
+      await handleAttendanceSubmission(presentStudents);
+      setPresentStudents([]);
+      setRecorder('');
+    };
+
+    const getRelevantStudents = () => {
+      if (selectedGroup === 'כולם') {
+        return currentYearStudents;
+      } else {
+        return currentYearStudents.filter(s => s.group === selectedGroup);
+      }
+    };
+
+    const relevantStudents = getRelevantStudents();
+    const studentsInAcademy = relevantStudents.filter(student => 
+      !isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
+    );
+    const studentsCurrentlyOut = relevantStudents.filter(student => 
+      isStudentAbsent(student.id, selectedDate, selectedTimeSlot)
+    );
+
+    const getCurrentTimeInfo = () => {
+      const now = new Date();
+      return now.toLocaleTimeString('he-IL', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+    };
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        <div className="bg-gradient-to-r from-amber-50 to-green-50 border border-amber-200 rounded-lg p-4">
+          <h2 className="text-2xl font-bold text-amber-800 mb-2">
+            רישום נוכחות - שנה {currentYear}
+          </h2>
+          <p className="text-amber-700">
+            {currentYear === "א" ? "מחזור ט - שנה ראשונה • עם חלוקה לקבוצות" : "מחזור ח - שנה שנייה"}
+          </p>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          {autoTimeSlot && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <Clock className="h-5 w-5 text-amber-600" />
+                  <span className="text-amber-800 font-medium">
+                    שעה נבחרה אוטומטית: {selectedTimeSlot}
+                  </span>
+                  <span className="text-amber-600 text-sm">
+                    (השעה הנוכחית: {getCurrentTimeInfo()})
+                  </span>
+                </div>
+                <button
+                  onClick={() => setAutoTimeSlot(false)}
+                  className="text-amber-600 hover:text-amber-800 text-sm underline"
+                >
+                  בחירה ידנית
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">תאריך</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">שעה</label>
+              <select
+                value={selectedTimeSlot}
+                onChange={(e) => {
+                  setSelectedTimeSlot(e.target.value);
+                  setAutoTimeSlot(false);
+                }}
+                disabled={autoTimeSlot}
+                className={`w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500 ${
+                  autoTimeSlot ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
+              >
+                {timeSlots.map(slot => (
+                  <option key={slot} value={slot}>{slot}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">קבוצה</label>
+              <select
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              >
+                {getGroupOptions().map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              {currentYear === "א" && (
+                <p className="text-xs text-gray-500 mt-1">
+                  בועז-הרב אילעאי • פולובין-הרב שובי
+                </p>
+              )}
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">רושם</label>
+              <select
+                value={recorder}
+                onChange={(e) => setRecorder(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="">בחר רושם</option>
+                {approvalOptions.map(person => (
+                  <option key={person} value={person}>{person}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-medium">חניכים נוכחים במכינה ({studentsInAcademy.length})</h3>
+              <div className="text-sm text-gray-600">
+                נבחרו: {presentStudents.length} / {studentsInAcademy.length}
+              </div>
+            </div>
+
+            {studentsCurrentlyOut.length > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded p-3 mb-3">
+                <h4 className="font-medium text-orange-800 mb-2">חניכים שיצאו מהמכינה ({studentsCurrentlyOut.length}):</h4>
+                <div className="text-sm text-orange-700">
+                  {studentsCurrentlyOut.map(student => student.name).join(', ')}
+                </div>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-96 overflow-y-auto border border-gray-200 rounded p-4">
+              {studentsInAcademy.length === 0 ? (
+                <div className="col-span-full text-center text-gray-500 py-4">
+                  {studentsCurrentlyOut.length > 0 ? 
+                    "כל החניכים בקבוצה זו נמצאים בהיעדרות" : 
+                    "אין חניכים בקבוצה זו"}
+                </div>
+              ) : (
+                studentsInAcademy.map(student => (
+                  <label key={student.id} className="flex items-center space-x-2 space-x-reverse p-2 hover:bg-gray-50 rounded cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={presentStudents.includes(student.id)}
+                      onChange={() => handleStudentToggle(student.id)}
+                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium">{student.name}</span>
+                      {student.group && (
+                        <span className={`mr-2 px-2 py-1 rounded text-xs ${
+                          student.group === 'בועז-הרב אילעאי' ? 'bg-blue-100 text-blue-800' : 
+                          student.group === 'פולובין-הרב שובי' ? 'bg-purple-100 text-purple-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {student.group}
+                        </span>
+                      )}
+                      {student.room && (
+                        <div className="text-xs text-gray-500 mt-1">{student.room}</div>
+                      )}
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-between">
+            <button
+              onClick={() => setPresentStudents(studentsInAcademy.map(s => s.id))}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300"
+              disabled={studentsInAcademy.length === 0 || isLoading}
+            >
+              בחר הכל
+            </button>
+            <button
+              onClick={() => setPresentStudents([])}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300"
+              disabled={isLoading}
+            >
+              נקה הכל
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="px-6 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:bg-amber-300"
+              disabled={studentsInAcademy.length === 0 || isLoading}
+            >
+              {isLoading ? 'שולח...' : 'שלח נוכחות'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Absence Reporting Component
+  const AbsenceReporting = () => {
+    const [formData, setFormData] = useState({
+      studentId: '',
+      departureDate: new Date().toISOString().split('T')[0],
+      departureTime: '08:00',
+      returnDate: new Date().toISOString().split('T')[0],
+      returnTime: '17:00',
+      purpose: '',
+      approvedBy: ''
+    });
+
+    const currentYearStudents = getCurrentYearStudents();
+
+    const handleInputChange = (field, value) => {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    };
+
+    const handleSubmit = async () => {
+      if (!formData.studentId || !formData.purpose || !formData.approvedBy) {
+        alert('אנא מלא את כל השדות הנדרשים');
+        return;
+      }
+
+      await handleAbsenceSubmission(formData);
+      
+      setFormData({
+        studentId: '',
+        departureDate: new Date().toISOString().split('T')[0],
+        departureTime: '08:00',
+        returnDate: new Date().toISOString().split('T')[0],
+        returnTime: '17:00',
+        purpose: '',
+        approvedBy: ''
+      });
+    };
+
+    const getCurrentAbsences = () => {
+      const now = new Date();
+      return absences.filter(absence => {
+        const returnDateTime = new Date(`${absence.returnDate} ${absence.returnTime}`);
+        const student = students.find(s => s.id === parseInt(absence.studentId));
+        return returnDateTime >= now && student && student.year === currentYear;
+      });
+    };
+
+    const currentAbsences = getCurrentAbsences();
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        <div className="bg-gradient-to-r from-amber-50 to-green-50 border border-amber-200 rounded-lg p-4">
+          <h2 className="text-2xl font-bold text-amber-800 mb-2">
+            דיווח היעדרויות - שנה {currentYear}
+          </h2>
+          <p className="text-amber-700">
+            {currentYear === "א" ? "מחזור ט - שנה ראשונה" : "מחזור ח - שנה שנייה"}
+          </p>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold mb-4 text-amber-800">דיווח היעדרות חדשה</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">חניך</label>
+              <select
+                value={formData.studentId}
+                onChange={(e) => handleInputChange('studentId', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="">בחר חניך</option>
+                {currentYearStudents.map(student => (
+                  <option key={student.id} value={student.id}>
+                    {student.name}{student.group && ` (${student.group})`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">מאושר על ידי</label>
+              <select
+                value={formData.approvedBy}
+                onChange={(e) => handleInputChange('approvedBy', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="">בחר מאשר</option>
+                {approvalOptions.map(approver => (
+                  <option key={approver} value={approver}>{approver}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">תאריך יציאה</label>
+              <input
+                type="date"
+                value={formData.departureDate}
+                onChange={(e) => handleInputChange('departureDate', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">שעת יציאה</label>
+              <input
+                type="time"
+                value={formData.departureTime}
+                onChange={(e) => handleInputChange('departureTime', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">תאריך חזרה צפויה</label>
+              <input
+                type="date"
+                value={formData.returnDate}
+                onChange={(e) => handleInputChange('returnDate', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">שעת חזרה צפויה</label>
+              <input
+                type="time"
+                value={formData.returnTime}
+                onChange={(e) => handleInputChange('returnTime', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">מטרת היציאה</label>
+            <input
+              type="text"
+              value={formData.purpose}
+              onChange={(e) => handleInputChange('purpose', e.target.value)}
+              placeholder="למשל: ביקור רופא, אירוע משפחתי, צרכים אישיים..."
+              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+
+          <button
+            onClick={handleSubmit}
+            className="w-full px-6 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:bg-amber-300"
+            disabled={isLoading}
+          >
+            {isLoading ? 'שולח...' : 'דווח היעדרות'}
+          </button>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold mb-4 text-amber-800">היעדרויות פעילות</h3>
+          
+          {currentAbsences.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">אין היעדרויות פעילות כרגע בשנה זו</p>
+          ) : (
+            <div className="space-y-3">
+              {currentAbsences.map(absence => {
+                const student = students.find(s => s.id === parseInt(absence.studentId));
+                const departureDateTime = new Date(`${absence.departureDate} ${absence.departureTime}`);
+                const returnDateTime = new Date(`${absence.returnDate} ${absence.returnTime}`);
+                const isCurrentlyOut = new Date() >= departureDateTime;
+                
+                return (
+                  <div key={absence.id} className={`border rounded-lg p-4 ${
+                    isCurrentlyOut ? 'border-red-200 bg-red-50' : 'border-yellow-200 bg-yellow-50'
+                  }`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-medium">
+                          {student?.name}{student?.group && ` (${student.group})`}
+                        </h4>
+                        <p className="text-sm text-gray-600">{absence.purpose}</p>
+                      </div>
+                      <div className="text-left">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          isCurrentlyOut ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {isCurrentlyOut ? 'יצא מהמכינה' : 'היעדרות מתוכננת'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium">יציאה: </span>
+                        {absence.departureDate} בשעה {absence.departureTime}
+                      </div>
+                      <div>
+                        <span className="font-medium">חזרה צפויה: </span>
+                        {absence.returnDate} בשעה {absence.returnTime}
+                      </div>
+                    </div>
+                    
+                    <div className="mt-2 text-sm">
+                      <span className="font-medium">מאושר על ידי: </span>
+                      <span className="text-amber-600">{absence.approvedBy}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Students Overview Component
+  const StudentsOverview = () => {
+    const currentYearStudents = getCurrentYearStudents();
+    const filteredStudents = currentYearStudents.filter(student =>
+      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (student.group && student.group.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (student.room && student.room.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        <div className="bg-gradient-to-r from-amber-50 to-green-50 border border-amber-200 rounded-lg p-4">
+          <h2 className="text-2xl font-bold text-amber-800 mb-2">
+            סקירת חניכים - שנה {currentYear}
+          </h2>
+          <p className="text-amber-700">
+            {currentYear === "א" ? "מחזור ט - שנה ראשונה • עם חלוקה לקבוצות וחדרים" : "מחזור ח - שנה שנייה"} 
+            • {currentYearStudents.length} חניכים
+          </p>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-amber-800">טבלת חניכים</h3>
+            <div className="flex space-x-2 space-x-reverse">
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="חפש חניכים, קבוצות או חדרים..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pr-10 pl-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-right py-3 px-4 font-medium">שם</th>
+                  {currentYear === "א" && (
+                    <>
+                      <th className="text-right py-3 px-4 font-medium">קבוצה</th>
+                      <th className="text-right py-3 px-4 font-medium">חדר</th>
+                    </>
+                  )}
+                  <th className="text-center py-3 px-4 font-medium">אחוז נוכחות</th>
+                  <th className="text-center py-3 px-4 font-medium">נוכח/נדרש</th>
+                  <th className="text-center py-3 px-4 font-medium">סטטוס</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStudents.map(student => {
+                  const stats = calculateAttendanceStats(student.id);
+                  return (
+                    <tr key={student.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4 font-medium">{student.name}</td>
+                      {currentYear === "א" && (
+                        <>
+                          <td className="py-3 px-4">
+                            {student.group ? (
+                              <span className={`px-2 py-1 rounded text-xs ${
+                                student.group === 'בועז-הרב אילעאי' ? 'bg-blue-100 text-blue-800' : 
+                                student.group === 'פולובין-הרב שובי' ? 'bg-purple-100 text-purple-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {student.group}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs">לא משויך</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="text-sm text-gray-600">{student.room || 'לא נקבע'}</span>
+                          </td>
+                        </>
+                      )}
+                      <td className="py-3 px-4 text-center">
+                        <span className={`font-semibold ${
+                          stats.status === 'critical' ? 'text-red-600' : 
+                          stats.status === 'warning' ? 'text-yellow-600' : 'text-green-600'
+                        }`}>
+                          {stats.percentage}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center text-sm text-gray-600">
+                        {stats.presentCount} / {stats.expectedLessons}
+                        {stats.totalLessons !== stats.expectedLessons && (
+                          <div className="text-xs text-orange-600">
+                            ({stats.totalLessons - stats.expectedLessons} בהיעדרות)
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {stats.status === 'critical' && <span className="text-red-600">🚨</span>}
+                        {stats.status === 'warning' && <span className="text-yellow-600">⚠️</span>}
+                        {stats.status === 'good' && <span className="text-green-600">✅</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {filteredStudents.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              {searchTerm ? 'לא נמצאו חניכים התואמים לחיפוש' : 'אין חניכים בשנה זו'}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Students Management Component
+  const StudentsManagement = () => {
+    const [editingStudent, setEditingStudent] = useState(null);
+    const [editForm, setEditForm] = useState({ name: '', group: '', room: '' });
+    const [newStudent, setNewStudent] = useState({ name: '', group: null, room: null });
+    const [showAddForm, setShowAddForm] = useState(false);
+
+    const currentYearStudents = getCurrentYearStudents();
+
+    const handleEditStart = (student) => {
+      setEditingStudent(student.id);
+      setEditForm({ 
+        name: student.name, 
+        group: student.group || '', 
+        room: student.room || '' 
+      });
+    };
+
+    const handleEditSave = () => {
+      if (!editForm.name.trim()) {
+        alert('נא להזין שם חניך');
+        return;
+      }
+
+      const updatedStudents = students.map(student =>
+        student.id === editingStudent
+          ? { 
+              ...student, 
+              name: editForm.name.trim(), 
+              group: editForm.group || null,
+              room: editForm.room || null
+            }
+          : student
+      );
+
+      handleStudentUpdate(updatedStudents);
+      setEditingStudent(null);
+      setEditForm({ name: '', group: '', room: '' });
+    };
+
+    const handleEditCancel = () => {
+      setEditingStudent(null);
+      setEditForm({ name: '', group: '', room: '' });
+    };
+
+    const handleDelete = (studentId) => {
+      if (window.confirm('האם אתה בטוח שברצונך למחוק את החניך?')) {
+        const updatedStudents = students.filter(s => s.id !== studentId);
+        handleStudentUpdate(updatedStudents);
+      }
+    };
+
+    const handleAddStudent = () => {
+      if (!newStudent.name.trim()) {
+        alert('נא להזין שם חניך');
+        return;
+      }
+
+      const newId = Math.max(...students.map(s => s.id), 0) + 1;
+      const updatedStudents = [...students, {
+        id: newId,
+        name: newStudent.name.trim(),
+        year: currentYear,
+        group: newStudent.group || null,
+        room: newStudent.room || null
+      }];
+
+      handleStudentUpdate(updatedStudents);
+      setNewStudent({ name: '', group: null, room: null });
+      setShowAddForm(false);
+    };
+
+    const handleMoveToGroup = (studentId, newGroup) => {
+      const updatedStudents = students.map(student =>
+        student.id === studentId
+          ? { ...student, group: newGroup }
+          : student
+      );
+      handleStudentUpdate(updatedStudents);
+    };
+
+    const resetToRealData = () => {
+      if (window.confirm('האם אתה בטוח שברצונך לאפס את הרשימה לנתונים המקוריים? כל השינויים יאבדו.')) {
+        handleStudentUpdate(allStudentsData);
+      }
+    };
+
+    const groupBoazStudents = currentYearStudents.filter(s => s.group === 'בועז-הרב אילעאי');
+    const groupPolovinStudents = currentYearStudents.filter(s => s.group === 'פולובין-הרב שובי');
+    const unassignedStudents = currentYearStudents.filter(s => !s.group);
+
+    const StudentCard = ({ student, borderColor }) => (
+      <div className={`bg-white border border-${borderColor}-200 rounded p-3`}>
+        {editingStudent === student.id ? (
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={editForm.name}
+              onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+              className={`w-full p-2 border border-${borderColor}-300 rounded text-sm`}
+              placeholder="שם החניך"
+            />
+            {currentYear === "א" && (
+              <select
+                value={editForm.group}
+                onChange={(e) => setEditForm(prev => ({ ...prev, group: e.target.value }))}
+                className={`w-full p-2 border border-${borderColor}-300 rounded text-sm`}
+              >
+                <option value="">בחר קבוצה</option>
+                <option value="בועז-הרב אילעאי">בועז-הרב אילעאי</option>
+                <option value="פולובין-הרב שובי">פולובין-הרב שובי</option>
+              </select>
+            )}
+            <input
+              type="text"
+              value={editForm.room}
+              onChange={(e) => setEditForm(prev => ({ ...prev, room: e.target.value }))}
+              className={`w-full p-2 border border-${borderColor}-300 rounded text-sm`}
+              placeholder="חדר"
+            />
+            <div className="flex space-x-2 space-x-reverse">
+              <button
+                onClick={handleEditSave}
+                className="px-3 py-1 bg-amber-600 text-white rounded text-sm hover:bg-amber-700"
+                disabled={isLoading}
+              >
+                שמור
+              </button>
+              <button
+                onClick={handleEditCancel}
+                className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <span className="font-medium text-sm block">{student.name}</span>
+              <span className="text-xs text-gray-500">ID: {student.id}</span>
+              {student.room && (
+                <span className="text-xs text-gray-600 block">חדר: {student.room}</span>
+              )}
+            </div>
+            <div className="flex flex-col space-y-1">
+              <button
+                onClick={() => handleEditStart(student)}
+                className="text-blue-600 hover:text-blue-800 text-xs p-1"
+                title="ערוך"
+              >
+                <Edit className="h-3 w-3" />
+              </button>
+              {currentYear === "א" && (
+                <button
+                  onClick={() => handleMoveToGroup(student.id, student.group === 'בועז-הרב אילעאי' ? 'פולובין-הרב שובי' : 'בועז-הרב אילעאי')}
+                  className="text-orange-600 hover:text-orange-800 text-xs"
+                  title={`העבר ל${student.group === 'בועז-הרב אילעאי' ? 'פולובין-הרב שובי' : 'בועז-הרב אילעאי'}`}
+                >
+                  ↔
+                </button>
+              )}
+              <button
+                onClick={() => handleDelete(student.id)}
+                className="text-red-600 hover:text-red-800 text-xs p-1"
+                title="מחק"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+
+    return (
+      <div className="space-y-6" dir="rtl">
+        <div className="bg-gradient-to-r from-amber-50 to-green-50 border border-amber-200 rounded-lg p-4">
+          <h2 className="text-2xl font-bold text-amber-800 mb-2">
+            ניהול חניכים - שנה {currentYear}
+          </h2>
+          <p className="text-amber-700">
+            {currentYear === "א" ? "מחזור ט - שנה ראשונה" : "מחזור ח - שנה שנייה"}
+          </p>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-amber-800">ניהול רשימת חניכים</h3>
+            <div className="flex space-x-2 space-x-reverse">
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center space-x-1 space-x-reverse"
+              >
+                <Plus className="h-4 w-4" />
+                <span>הוסף חניך</span>
+              </button>
+              <button
+                onClick={resetToRealData}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center space-x-1 space-x-reverse"
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span>אפס לנתונים מקוריים</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+              <div className="text-center">
+                <p className="text-sm font-medium text-amber-700">סך החניכים</p>
+                <p className="text-2xl font-bold text-amber-900">{currentYearStudents.length}</p>
+              </div>
+            </div>
+            {currentYear === "א" && (
+              <>
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-blue-700">בועז-הרב אילעאי</p>
+                    <p className="text-2xl font-bold text-blue-900">{groupBoazStudents.length}</p>
+                  </div>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-purple-700">פולובין-הרב שובי</p>
+                    <p className="text-2xl font-bold text-purple-900">{groupPolovinStudents.length}</p>
+                  </div>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-700">לא משויכים</p>
+                    <p className="text-2xl font-bold text-gray-900">{unassignedStudents.length}</p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {showAddForm && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <h4 className="font-semibold text-green-800 mb-3">הוספת חניך חדש</h4>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input
+                  type="text"
+                  placeholder="שם החניך"
+                  value={newStudent.name}
+                  onChange={(e) => setNewStudent(prev => ({ ...prev, name: e.target.value }))}
+                  className="p-2 border border-green-300 rounded focus:ring-2 focus:ring-green-500"
+                />
+                {currentYear === "א" && (
+                  <select
+                    value={newStudent.group || ''}
+                    onChange={(e) => setNewStudent(prev => ({ ...prev, group: e.target.value || null }))}
+                    className="p-2 border border-green-300 rounded focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">בחר קבוצה</option>
+                    <option value="בועז-הרב אילעאי">בועז-הרב אילעאי</option>
+                    <option value="פולובין-הרב שובי">פולובין-הרב שובי</option>
+                  </select>
+                )}
+                <input
+                  type="text"
+                  placeholder="חדר (אופציונלי)"
+                  value={newStudent.room || ''}
+                  onChange={(e) => setNewStudent(prev => ({ ...prev, room: e.target.value || null }))}
+                  className="p-2 border border-green-300 rounded focus:ring-2 focus:ring-green-500"
+                />
+                <div className="flex space-x-2 space-x-reverse">
+                  <button
+                    onClick={handleAddStudent}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                    disabled={isLoading}
+                  >
+                    הוסף
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setNewStudent({ name: '', group: null, room: null });
+                    }}
+                    className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  >
+                    ביטול
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentYear === "א" ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-800 mb-3">
+                  בועז-הרב אילעאי ({groupBoazStudents.length})
+                </h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {groupBoazStudents.map(student => (
+                    <StudentCard key={student.id} student={student} borderColor="blue" />
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <h4 className="font-semibold text-purple-800 mb-3">
+                  פולובין-הרב שובי ({groupPolovinStudents.length})
+                </h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {groupPolovinStudents.map(student => (
+                    <StudentCard key={student.id} student={student} borderColor="purple" />
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h4 className="font-semibold text-gray-800 mb-3">
+                  לא משויכים ({unassignedStudents.length})
+                </h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {unassignedStudents.map(student => (
+                    <StudentCard key={student.id} student={student} borderColor="gray" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <h4 className="font-semibold text-green-800 mb-3">
+                חניכי שנה ב ({currentYearStudents.length})
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {currentYearStudents.map(student => (
+                  <StudentCard key={student.id} student={student} borderColor="green" />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+                import React, { useState, useEffect } from 'react';
 import { Users, Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Plus, Search, Filter, Download, Edit, Trash2, UserPlus, RotateCcw, RefreshCw, Database } from 'lucide-react';
 
 const AttendanceApp = () => {
@@ -724,7 +1793,10 @@ const AttendanceApp = () => {
         {dataLoaded && (
           <>
             {currentView === 'dashboard' && <Dashboard />}
-            {/* Other views can be added here similarly */}
+            {currentView === 'attendance' && <TakeAttendance />}
+            {currentView === 'absences' && <AbsenceReporting />}
+            {currentView === 'students' && <StudentsOverview />}
+            {currentView === 'manage-students' && <StudentsManagement />}
           </>
         )}
 
