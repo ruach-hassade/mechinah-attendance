@@ -103,6 +103,35 @@ const AttendanceApp = () => {
   const [lastSync, setLastSync] = useState(new Date());
   const [absences, setAbsences] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [attendanceStats, setAttendanceStats] = useState({});
+
+  const refreshData = async () => {
+    setIsLoading(true);
+    try {
+      // Load real attendance data and update stats
+      const attendanceData = await loadAttendanceData();
+      
+      // Calculate stats for all students
+      const newStats = {};
+      for (const student of students) {
+        newStats[student.id] = await calculateRealAttendanceStats(student.id);
+      }
+      setAttendanceStats(newStats);
+      
+      setLastSync(new Date());
+      alert('הנתונים נרענו בהצלחה מגיליון Google Sheets!');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      alert('שגיאה בטעינת נתונים מהגיליון. בודק חיבור לאינטרנט.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load initial data on component mount
+  useEffect(() => {
+    refreshData();
+  }, []);
 
   // Helper functions
   const getCurrentYearStudents = () => students.filter(s => s.year === currentYear);
@@ -119,12 +148,94 @@ const AttendanceApp = () => {
     }
   };
 
-  const refreshData = async () => {
+  // Google Sheets integration functions
+  const sendToSheet = async (sheetName, data, action = 'write') => {
+    try {
+      const GAS_URL = 'https://script.google.com/macros/s/AKfycbz0l6_ggK802nEXaSM8Xs90SDV6KUPa6AParwkcZ4--niNo3BEH-5l1De-YgUIq3e8_cw/exec';
+      const payload = { action: action, sheetName: sheetName, data: data };
+      const response = await fetch(GAS_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const result = await response.json();
+      return result.success;
+    } catch (error) {
+      console.error('Error sending to sheet:', error);
+      return false;
+    }
+  };
+
+  const fetchFromSheet = async (sheetName) => {
+    try {
+      const GAS_URL = 'https://script.google.com/macros/s/AKfycbz0l6_ggK802nEXaSM8Xs90SDV6KUPa6AParwkcZ4--niNo3BEH-5l1De-YgUIq3e8_cw/exec';
+      const payload = { action: 'read', sheetName: sheetName };
+      const response = await fetch(GAS_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const result = await response.json();
+      return result.success ? (result.data || []) : [];
+    } catch (error) {
+      console.error(`Error fetching from sheet ${sheetName}:`, error);
+      return [];
+    }
+  };
+
+  // Load attendance data and calculate real stats
+  const loadAttendanceData = async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setLastSync(new Date());
-    setIsLoading(false);
-    alert('הנתונים נרענו בהצלחה!');
+    try {
+      const attendanceData = await fetchFromSheet('נוכחות');
+      if (attendanceData.length > 0) {
+        // Process attendance data from sheets
+        const processedAttendance = attendanceData.map(row => ({
+          studentId: parseInt(row['ID תלמיד']) || 0,
+          present: row['נוכחות'] === 'נוכח',
+          date: row['תאריך'] || '',
+          timeSlot: row['שעה'] || '',
+          year: row['שנה'] || 'א'
+        }));
+        return processedAttendance;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error loading attendance data:', error);
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Calculate real attendance stats from Google Sheets data
+  const calculateRealAttendanceStats = async (studentId) => {
+    const attendanceRecords = await loadAttendanceData();
+    const studentRecords = attendanceRecords.filter(record => record.studentId === studentId);
+    
+    if (studentRecords.length === 0) {
+      return {
+        percentage: 0,
+        presentCount: 0,
+        expectedLessons: 0,
+        status: 'good'
+      };
+    }
+
+    const presentCount = studentRecords.filter(record => record.present).length;
+    const totalLessons = studentRecords.length;
+    const percentage = totalLessons > 0 ? Math.round((presentCount / totalLessons) * 100) : 0;
+    
+    let status = 'good';
+    if (percentage < 80) status = 'critical';
+    else if (percentage < 90) status = 'warning';
+    
+    return {
+      percentage,
+      presentCount,
+      expectedLessons: totalLessons,
+      status
+    };
   };
 
   // Effects
@@ -249,11 +360,41 @@ const AttendanceApp = () => {
       }
       
       setIsLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      alert(`נוכחות נרשמה: ${presentStudents.length} מתוך ${relevantStudents.length} חניכים`);
-      setPresentStudents([]);
-      setRecorder('');
-      setIsLoading(false);
+      
+      // Prepare data for Google Sheets
+      const sheetData = relevantStudents
+        .filter(student => !isStudentAbsent(student.id))
+        .map(student => [
+          selectedDate,
+          selectedTimeSlot,
+          student.id,
+          student.name,
+          student.year,
+          student.group || 'כולם',
+          presentStudents.includes(student.id) ? 'נוכח' : 'לא נוכח',
+          recorder,
+          new Date().toLocaleString('he-IL')
+        ]);
+
+      try {
+        const success = await sendToSheet('נוכחות', sheetData);
+        if (success) {
+          setLastSync(new Date());
+          alert(`נוכחות נרשמה בהצלחה בגיליון Google Sheets!\n${presentStudents.length} מתוך ${relevantStudents.length} חניכים נוכחים`);
+          
+          // Refresh attendance stats after submitting
+          await refreshData();
+        } else {
+          alert('הנוכחות נרשמה מקומית, אך לא הצליח לחבר לגיליון. בדוק חיבור לאינטרנט.');
+        }
+      } catch (error) {
+        console.error('Error submitting attendance:', error);
+        alert('שגיאה ברישום נוכחות. נסה שוב.');
+      } finally {
+        setPresentStudents([]);
+        setRecorder('');
+        setIsLoading(false);
+      }
     };
 
     return (
@@ -725,16 +866,20 @@ const AttendanceApp = () => {
       (student.room && student.room.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
-    // Mock attendance stats for display
+    // Calculate consistent mock stats based on student ID (so they don't change on refresh)
     const calculateMockAttendanceStats = (studentId) => {
-      const randomPercentage = Math.floor(Math.random() * 40) + 60; // 60-100%
+      // Use studentId as seed for consistent "random" values
+      const seed = studentId * 12345;
+      const pseudoRandom = (seed % 1000) / 1000;
+      const percentage = Math.floor(pseudoRandom * 40) + 60; // 60-100%
+      
       let status = 'good';
-      if (randomPercentage < 80) status = 'critical';
-      else if (randomPercentage < 90) status = 'warning';
+      if (percentage < 80) status = 'critical';
+      else if (percentage < 90) status = 'warning';
       
       return {
-        percentage: randomPercentage,
-        presentCount: Math.floor(randomPercentage * 0.3), // Mock data
+        percentage: percentage,
+        presentCount: Math.floor(percentage * 0.3), // Mock data
         expectedLessons: 30, // Mock data
         status: status
       };
@@ -765,6 +910,17 @@ const AttendanceApp = () => {
                   className="pr-10 pl-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Warning about mock data */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+            <div className="flex items-center space-x-2 space-x-reverse">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <span className="text-blue-800 text-sm">
+                <strong>הערה:</strong> אחוזי הנוכחות המוצגים הם נתונים לדוגמה. 
+                לנתונים אמיתיים יש צורך לחבר את המערכת לגיליון Google Sheets עם רישומי נוכחות קיימים.
+              </span>
             </div>
           </div>
 
