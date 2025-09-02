@@ -91,6 +91,19 @@ const AttendanceApp = () => {
   const timeSlots = ['07:30', '09:00', '12:15', '15:30', '16:45', '17:45', '20:00'];
   const approvalOptions = ['הרב איתמר', 'הרב אילעאי', 'בועז', 'הרב שובי', 'עמית', 'הרב יונדב', 'אסף', 'יהודה'];
 
+  // ===== תיקון קריטי - הוספת הפונקציה החסרה =====
+const isStudentAbsent = (studentId) => {
+  const now = new Date();
+  return absences.some(absence => {
+    if (parseInt(absence.studentId) !== studentId) return false;
+    
+    const departureDateTime = new Date(`${absence.departureDate} ${absence.departureTime}`);
+    const returnDateTime = new Date(`${absence.returnDate} ${absence.returnTime}`);
+    
+    return now >= departureDateTime && now <= returnDateTime;
+  });
+};
+  
   // State
   const [students] = useState(allStudentsData);
   const [currentYear, setCurrentYear] = useState("א");
